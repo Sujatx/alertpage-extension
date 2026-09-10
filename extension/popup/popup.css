@@ -1,0 +1,243 @@
+/*
+ * Standalone. This used to layer over options/options.css; that page is gone, so the
+ * tokens and the rules the popup actually uses live here now.
+ *
+ * Every colour is a token. Nothing below this block should carry a raw hex value - if
+ * you find yourself typing one, add a token for it instead, or the panel drifts out of
+ * step with itself the way it did when the scrollbar was still browser-default.
+ */
+
+:root {
+  /* Without this the browser paints its own widgets - scrollbars above all - using the
+     OS theme, so a dark-mode machine gets a black scrollbar down the side of a light
+     panel. Declaring the scheme is what actually fixes that; the ::-webkit- rules at
+     the bottom only refine what it already got right. */
+  color-scheme: light;
+
+  /* surfaces */
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --line: #dfe3e8;
+  --hover: #f2f4f7;
+
+  /* text */
+  --text: #1f2328;
+  --muted: #667085;
+
+  /* accent */
+  --accent: #0b5fff;
+  --accent-hover: #0a52dd;
+  --accent-text: #ffffff;
+
+  /* danger - the remove buttons and "Restore defaults" */
+  --danger: #b42318;
+  --danger-line: #f0c8c4;
+  --danger-hover: #fff5f4;
+
+  /* feedback */
+  --ok: #067647;
+
+  /* scrollbar */
+  --scroll-thumb: #cdd3db;
+  --scroll-thumb-hover: #b3bcc7;
+
+  /* shape */
+  --radius: 8px;
+  --radius-sm: 5px;
+  --radius-pill: 999px;
+
+  --font: 15px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Dark mode: same html[data-apa-theme="dark"] attribute working-screen.css and
+   data-feed.css key off, applied to this document by popup.js's applyTheme() since
+   the popup is its own page, not a content script those files reach. Every rule in
+   this file reads a token, so redefining the tokens here is the whole theme swap -
+   nothing below this block should ever need touching again. */
+html[data-apa-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #151515;
+  --card: #1c1f24;
+  --line: #2d3239;
+  --hover: #23272e;
+
+  --text: #e6edf3;
+  --muted: #9ca3af;
+
+  --accent: #4d8dff;
+  --accent-hover: #6ea8fe;
+  --accent-text: #ffffff;
+
+  --danger: #ea868f;
+  --danger-line: #5c2b2f;
+  --danger-hover: #2a1518;
+
+  --ok: #4ade80;
+
+  --scroll-thumb: #5D5C5A;
+  --scroll-thumb-hover: #726f6c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  width: 320px;
+  margin: 0;
+  padding: .9rem;
+  background: var(--bg);
+  color: var(--text);
+  font: var(--font);
+}
+
+.pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+  margin-bottom: .8rem;
+}
+.pop-head h1 { margin: 0; font-size: 1.05rem; }
+
+.theme-toggle {
+  padding: .35rem;
+  color: var(--muted);
+  border-color: transparent;
+  background: transparent;
+}
+.theme-toggle:hover { background: var(--hover); border-color: var(--line); color: var(--text); }
+.theme-toggle svg { display: block; width: 16px; height: 16px; }
+
+h2 { margin: 0; font-size: 1rem; letter-spacing: .02em; }
+.hint { margin: .3rem 0 .5rem; color: var(--muted); font-size: .78rem; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: .65rem .7rem;
+  margin-bottom: .55rem;
+}
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+
+.row { display: block; margin: .35rem 0; font-size: .92rem; }
+
+.row.toggle,
+.row.number {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+}
+
+/* Checkbox stays the real input - just visually replaced by .slider, which reads
+   its :checked state via the adjacent-sibling selector below. */
+.switch {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+}
+.switch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.switch .slider {
+  position: absolute;
+  inset: 0;
+  background: var(--line);
+  border-radius: var(--radius-pill);
+  transition: background .15s ease;
+}
+.switch .slider::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--card);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  transition: transform .15s ease;
+}
+.switch input:checked + .slider { background: var(--accent); }
+.switch input:checked + .slider::before { transform: translateX(14px); }
+.switch input:focus-visible + .slider { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+input[type="text"],
+input[type="number"],
+input[type="password"] {
+  font: inherit;
+  font-size: .88rem;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: .28rem .45rem;
+}
+
+/* One text input plus a trash button per row. No card around it - the input already
+   carries a border, and Chrome caps popups at 600px, so every row's chrome costs
+   entries the list can show before it starts scrolling. */
+.rule { margin-bottom: .3rem; }
+.rule-head { display: flex; align-items: center; flex-wrap: nowrap; gap: .35rem; }
+.rule-head input[type="text"],
+.rule-head input[type="password"] { flex: 1 1 auto; min-width: 0; }
+
+.btn {
+  font: inherit; font-size: .88rem;
+  padding: .4rem .85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn:hover { background: var(--hover); }
+.btn.ghost { font-size: .82rem; padding: .3rem .65rem; }
+.btn.danger-ghost { color: var(--danger); border-color: var(--danger-line); }
+.btn.danger-ghost:hover { background: var(--danger-hover); }
+.btn.remove {
+  font-size: .78rem;
+  padding: .25rem .55rem;
+  color: var(--danger);
+  border-color: var(--danger-line);
+}
+.btn.remove:hover { background: var(--danger-hover); }
+.btn.icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: .35rem; line-height: 0; }
+
+.pop-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+.pop-actions .btn { flex: 1 1 auto; }
+
+.status { display: block; margin-top: .5rem; min-height: 1.1em; font-size: .85rem; color: var(--ok); }
+
+.made-by { margin-top: .6rem; text-align: center; font-size: .78rem; color: var(--muted); }
+.made-by a { color: var(--muted); text-decoration: underline; }
+.made-by a:hover { color: var(--text); }
+
+/* Chrome 121+ honours these; older builds fall through to the ::-webkit- rules below,
+   which are kept in step with them. Track is transparent and the thumb is borderless
+   on purpose - a bordered thumb reads as a sunken gutter against a flat panel. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; border: 0; }
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border: 0;
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Narrow enough that the label keeps the row's width and the two-digit value it
+   almost always holds still reads without truncation. */
+.row.number input[type="number"] { flex: none; width: 4.5rem; text-align: right; }

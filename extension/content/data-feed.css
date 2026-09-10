@@ -1,0 +1,333 @@
+/*
+ * Styling for the one element this extension adds to the Data Feed: the banner that
+ * says which filters came from the lead.
+ *
+ * The page is MDBootstrap, whose utility classes set properties !important. Anything
+ * here that could collide with one (display, colour) is forced for the same reason
+ * the Working Screen stylesheet forces its own - a plain declaration loses silently.
+ */
+
+.apa-df-banner {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .4rem .75rem;
+  margin: 0 0 .75rem;
+  padding: .5rem .75rem;
+  border: 1px solid #b6d4fe;
+  border-left: 4px solid #0d6efd;
+  border-radius: .25rem;
+  background-color: #eef5ff;
+  font-size: .85rem;
+  line-height: 1.35;
+  color: #000;
+}
+
+.apa-df-banner-text {
+  font-weight: 600;
+}
+
+/* Second line on narrow panels, dimmer than the applied list - this is the part she
+   only needs if the results look wrong. */
+.apa-df-banner-note {
+  flex-basis: 100%;
+  font-weight: 400;
+  color: #52616b;
+}
+
+.apa-df-banner-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  margin-left: auto;
+}
+
+.apa-df-banner-btn {
+  padding: .2rem .55rem;
+  border: 1px solid #6c757d;
+  border-radius: .2rem;
+  background-color: #fff;
+  color: #000;
+  font-size: .8rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.apa-df-banner-btn:hover,
+.apa-df-banner-btn:focus {
+  background-color: #e9ecef;
+}
+
+.apa-df-banner-dismiss {
+  border-color: #adb5bd;
+  font-weight: 400;
+}
+
+/* ---- Summarize ---- */
+
+.apa-df-banner-btn:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+/* The assembled line, on its own row under the banner text/actions. */
+.apa-df-summary {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0;
+  font-size: .85rem;
+}
+
+.apa-df-summary:empty {
+  display: none;
+}
+
+.apa-df-summary-plain {
+  color: #000;
+  white-space: pre;
+}
+
+/* A verified segment - styled and behaving like a real hyperlink, but a <button> so
+   it stays keyboard-reachable. */
+.apa-df-summary-chip {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #0d6efd;
+  text-decoration: underline;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.apa-df-summary-chip:hover,
+.apa-df-summary-chip:focus {
+  color: #0a58ca;
+}
+
+.apa-df-summary-copy {
+  display: inline-flex;
+  align-items: center;
+  margin-left: .4rem;
+  padding: .15rem;
+  border: 0;
+  background: none;
+  color: #52616b;
+  cursor: pointer;
+}
+
+.apa-df-summary-copy:hover,
+.apa-df-summary-copy:focus {
+  color: #000;
+}
+
+.apa-df-summary-error {
+  flex-basis: 100%;
+  color: #b02a37;
+  font-weight: 400;
+}
+
+.apa-df-summary-note {
+  flex-basis: 100%;
+  color: #52616b;
+  font-size: .8rem;
+}
+
+.apa-df-summary-note:empty {
+  display: none;
+}
+
+/* The row jumped to via a Summarize hyperlink - a few seconds of emphasis, not a
+   permanent marker (the list rebuilds wholesale every ~30s anyway). */
+.transmission-entry.apa-df-transmission-highlight {
+  outline: 3px solid #ffc107 !important;
+  outline-offset: -1px;
+  transition: outline-color .3s ease;
+}
+
+/* ---- Dark mode (Phase: theme) ----
+ *
+ * Same mechanism as working-screen.css: opt-in via the popup, applied by
+ * content/data-feed.js as html[data-apa-theme="dark"]. This page is MDBootstrap, not
+ * plain Bootstrap - !important throughout for the same reason the rest of this file
+ * already forces display/colour against MDBootstrap's own utility classes.
+ * Selectors are the real ones from captures/data-feed/data-feed.html (navbar,
+ * accordion-*, list-group, form-select, transmission-entry, etc.).
+ */
+
+html[data-apa-theme="dark"] {
+  color-scheme: dark;
+}
+
+html[data-apa-theme="dark"] body,
+html[data-apa-theme="dark"] .container-fluid,
+html[data-apa-theme="dark"] .bg-light {
+  background-color: #151515 !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .navbar,
+html[data-apa-theme="dark"] .navbar-light {
+  background-color: #16181c !important;
+  border-color: #2d3239 !important;
+}
+
+html[data-apa-theme="dark"] .navbar-light .nav-link,
+html[data-apa-theme="dark"] .navbar-light .navbar-brand {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .accordion-item,
+html[data-apa-theme="dark"] .accordion-body,
+html[data-apa-theme="dark"] .accordion-header {
+  background-color: #1c1f24 !important;
+  border-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .accordion-button {
+  background-color: #1c1f24 !important;
+  color: #e6edf3 !important;
+}
+html[data-apa-theme="dark"] .accordion-button::after {
+  filter: invert(1) brightness(1.8);
+}
+
+html[data-apa-theme="dark"] .form-label,
+html[data-apa-theme="dark"] .form-check-label,
+html[data-apa-theme="dark"] label {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .form-text,
+html[data-apa-theme="dark"] .text-muted {
+  color: #9ca3af !important;
+}
+
+html[data-apa-theme="dark"] .form-control,
+html[data-apa-theme="dark"] .form-select,
+html[data-apa-theme="dark"] input[type="text"],
+html[data-apa-theme="dark"] input[type="datetime-local"],
+html[data-apa-theme="dark"] select {
+  background-color: #23272e !important;
+  border-color: #3b424d !important;
+  color: #e6edf3 !important;
+}
+
+/* The list itself is a frame around the cards, not a card - forcing it to the same
+   fill as .list-group-item/.transmission-entry made the gaps between cards look like
+   part of one solid block instead of separate transmissions. Transparent here lets
+   .container-fluid's darker background (#151515, above) show through the gaps. */
+html[data-apa-theme="dark"] .list-group {
+  background-color: transparent !important;
+  border-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .list-group-item,
+html[data-apa-theme="dark"] .transmission-entry {
+  background-color: #1c1f24 !important;
+  border-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .modal-content {
+  background-color: #1c1f24 !important;
+  border-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+html[data-apa-theme="dark"] .modal-header,
+html[data-apa-theme="dark"] .modal-footer {
+  border-color: #2d3239 !important;
+}
+html[data-apa-theme="dark"] .modal-title,
+html[data-apa-theme="dark"] .modal-body {
+  color: #e6edf3 !important;
+}
+
+/* .pagination-circle (confirmed in data-feed.html:387, id="pagination") is a themed
+   variant with its own higher-specificity rules for the circle fill and number
+   colour - the plain .page-link override below loses to it silently, which is why
+   the page numbers stayed dark-on-dark. Matched at the same specificity here. */
+html[data-apa-theme="dark"] .pagination .page-link,
+html[data-apa-theme="dark"] .pagination-circle .page-link {
+  background-color: #23272e !important;
+  border-color: #3b424d !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .pagination .page-item.disabled .page-link,
+html[data-apa-theme="dark"] .pagination-circle .page-item.disabled .page-link {
+  background-color: #181a1f !important;
+  color: #6b7280 !important;
+}
+
+html[data-apa-theme="dark"] .pagination .page-item.active .page-link,
+html[data-apa-theme="dark"] .pagination-circle .page-item.active .page-link {
+  color: #ffffff !important;
+}
+
+html[data-apa-theme="dark"] .btn:not(.btn-primary) {
+  background-color: #23272e !important;
+  border-color: #3b424d !important;
+  color: #e6edf3 !important;
+}
+
+/* ---- Dark mode: this extension's own banner ---- */
+
+html[data-apa-theme="dark"] .apa-df-banner {
+  background-color: #1c2733 !important;
+  border-color: #2f4a6b !important;
+  border-left-color: #4d8dff !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .apa-df-banner-note {
+  color: #9ca3af !important;
+}
+
+html[data-apa-theme="dark"] .apa-df-banner-btn {
+  background-color: #23272e !important;
+  border-color: #4b5563 !important;
+  color: #e6edf3 !important;
+}
+html[data-apa-theme="dark"] .apa-df-banner-btn:hover,
+html[data-apa-theme="dark"] .apa-df-banner-btn:focus {
+  background-color: #2d3239 !important;
+}
+html[data-apa-theme="dark"] .apa-df-banner-dismiss {
+  border-color: #3b424d !important;
+}
+
+html[data-apa-theme="dark"] .apa-df-summary-plain {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .apa-df-summary-chip {
+  color: #6ea8fe !important;
+}
+html[data-apa-theme="dark"] .apa-df-summary-chip:hover,
+html[data-apa-theme="dark"] .apa-df-summary-chip:focus {
+  color: #9ec5fe !important;
+}
+
+html[data-apa-theme="dark"] .apa-df-summary-error {
+  color: #ea868f !important;
+}
+
+html[data-apa-theme="dark"] .apa-df-summary-copy {
+  color: #9ca3af !important;
+}
+html[data-apa-theme="dark"] .apa-df-summary-copy:hover,
+html[data-apa-theme="dark"] .apa-df-summary-copy:focus {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .apa-df-summary-note {
+  color: #9ca3af !important;
+}
+

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AlertPage Assist</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="pop-head">
+    <h1>AlertPage Assist</h1>
+    <button type="button" id="themeToggle" class="btn icon-btn theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode" aria-pressed="false"></button>
+  </header>
+
+  <section class="card">
+    <h2>Display</h2>
+    <label class="row toggle">
+      <span>Highlight keywords</span>
+      <span class="switch"><input type="checkbox" id="highlightEnabled"><span class="slider"></span></span>
+    </label>
+    <label class="row toggle">
+      <span>Reshuffle footer buttons</span>
+      <span class="switch"><input type="checkbox" id="footerReshuffleEnabled"><span class="slider"></span></span>
+    </label>
+    <label class="row toggle">
+      <span>Monitor autosend</span>
+      <span class="switch"><input type="checkbox" id="monitorAutoSendEnabled"><span class="slider"></span></span>
+    </label>
+  </section>
+
+  <section class="card">
+    <h2>Data Feed sync</h2>
+    <p class="hint">What the Data Feed link carries over from the lead.</p>
+    <label class="row toggle">
+      <span>Source (system)</span>
+      <span class="switch"><input type="checkbox" id="syncSource"><span class="slider"></span></span>
+    </label>
+    <label class="row toggle">
+      <span>County</span>
+      <span class="switch"><input type="checkbox" id="syncCounty"><span class="slider"></span></span>
+    </label>
+    <label class="row toggle">
+      <span>Talk group</span>
+      <span class="switch"><input type="checkbox" id="syncTalkgroup"><span class="slider"></span></span>
+    </label>
+    <label class="row toggle">
+      <span>Time window</span>
+      <span class="switch"><input type="checkbox" id="syncTimeRange"><span class="slider"></span></span>
+    </label>
+    <label class="row number">
+      <span>Window, minutes each way</span>
+      <input type="number" id="timeWindowMinutes" min="1" max="720" step="1" inputmode="numeric">
+    </label>
+  </section>
+
+  <section class="card">
+    <h2>Summarize AI(beta)</h2>
+    <p class="hint">Uses your own Gemini API key.</p>
+    <label class="row toggle">
+      <span>Enable Summarize</span>
+      <span class="switch"><input type="checkbox" id="llmEnabled"><span class="slider"></span></span>
+    </label>
+    <div class="rule-head">
+      <input type="password" id="llmApiKey" placeholder="Gemini API key" autocomplete="off">
+      <button type="button" id="llmApiKeyToggle" class="btn icon-btn" title="Show key" aria-label="Show key"></button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Keywords</h2>
+      <button type="button" id="addKeyword" class="btn ghost">+ Add</button>
+    </div>
+    <p class="hint">Highlighted in the transcript. Case-insensitive, whole-word.</p>
+    <div id="keywords"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Quick note pills</h2>
+      <button type="button" id="addPill" class="btn ghost">+ Add</button>
+    </div>
+    <p class="hint">Shown beside Internal Notes. Clicking one replaces the field.</p>
+    <div id="pills"></div>
+  </section>
+
+  <footer class="pop-actions">
+    <button type="button" id="reset" class="btn danger-ghost">Restore defaults</button>
+  </footer>
+  <span id="status" class="status" role="status" aria-live="polite"></span>
+
+  <div class="made-by">Made by <a href="https://github.com/Sujatx" target="_blank" rel="noopener noreferrer">Sujat</a></div>
+
+  <script src="../config/keywords.js"></script>
+  <script src="../config/pills.js"></script>
+  <script src="../config/data-feed-settings.js"></script>
+  <script src="../config/summarize-settings.js"></script>
+  <script src="../lib/highlight.js"></script>
+  <script src="../lib/notes.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

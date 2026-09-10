@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "AlertPage Working Screen Assist",
+  "version": "0.1.0",
+  "description": "Readability, Accessibility, Data Feed sync and an opt-in BYOK Summarize feature for AlertPage.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://dispatch.alertpage.net/*",
+    "https://ap-portal.alertpage.net/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "AlertPage Assist settings",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://dispatch.alertpage.net/web/working-queue/*"],
+      "run_at": "document_idle",
+      "all_frames": false,
+      "js": [
+        "config/selectors.js",
+        "config/keywords.js",
+        "config/pills.js",
+        "config/data-feed-settings.js",
+        "lib/parse-lead.js",
+        "lib/highlight.js",
+        "lib/notes.js",
+        "lib/lead-feed.js",
+        "lib/transmissions.js",
+        "content/working-screen.js"
+      ],
+      "css": ["content/working-screen.css"]
+    },
+    {
+      "matches": ["https://ap-portal.alertpage.net/data_feed*"],
+      "run_at": "document_idle",
+      "all_frames": false,
+      "js": [
+        "config/selectors.js",
+        "config/data-feed-settings.js",
+        "lib/lead-feed.js",
+        "content/data-feed.js"
+      ],
+      "css": ["content/data-feed.css"]
+    }
+  ]
+}

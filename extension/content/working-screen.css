@@ -1,0 +1,701 @@
+/*
+ * Every rule is scoped under .apa-* so nothing leaks into AlertPage's own styles.
+ * Colours are stated explicitly rather than inherited, because the block this
+ * replaces sits inside a Bootstrap .text-muted container.
+ */
+
+.apa-lead {
+  padding: 0 0 0 .25rem;
+  margin: 0 0 .25rem 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #212529;
+}
+
+.apa-lead .apa-field {
+  display: block;
+  margin: 0 0 .55rem 0;
+}
+
+/* Sized and coloured to match AlertPage's own .control-label, so the added
+   fields read as part of the page rather than a foreign overlay. */
+.apa-lead .apa-label {
+  display: block;
+  margin: 0 0 .15rem 0;
+  font-weight: 550;
+  font-size: 13px;
+  color: #000;
+}
+
+.apa-lead .apa-value {
+  display: block;
+  color: #212529;
+}
+
+/* Source follows the transcript and opens the secondary detail region. */
+.apa-lead .apa-field-feed {
+  margin-top: .85rem;
+}
+
+.apa-lead .apa-field-feed .apa-value {
+  font-weight: 400;
+  color: #212529;
+}
+
+/* 1A: the transcript leads the block - label on its own line, with the
+   transcription below it in its own bounded box. */
+.apa-lead .apa-field-transcript {
+  margin-top: 0;
+  margin-bottom: .4rem;
+}
+
+/* Alert Category and Alert Keywords are the lowest-value fields on screen, so they
+   share one row. auto-fit drops them to a single column when the panel is narrow. */
+.apa-lead .apa-meta-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: .1rem 1.75rem;
+}
+
+.apa-lead .apa-meta-row .apa-field {
+  margin-bottom: .25rem;
+}
+
+/* Transcript's label is otherwise identical to every other field label now -
+   same weight, same colour, same size - no bespoke uppercase caption. */
+.apa-lead .apa-label-transcript {
+  color: #000;
+}
+
+.apa-lead .apa-transcript {
+  margin-top: .3rem;
+  padding: .65rem .75rem;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  color: #212529;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.apa-lead .apa-field-extra .apa-value {
+  color: #6c757d;
+}
+
+/* Shown only when the parser could not find a recognisable transcript line -
+   collapses the server's original text behind a toggle instead of hiding it,
+   so nothing she needs is ever unreachable. */
+.apa-lead-raw-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  margin: 0 0 .5rem 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: .85rem;
+  color: #495057;
+  cursor: pointer;
+}
+
+.apa-lead-raw-toggle:hover {
+  color: #212529;
+  text-decoration: underline;
+}
+
+/* 1B: keyword marks. Background and text colour come from the ruleset and are set
+   inline, so editing a colour in settings needs no stylesheet change. */
+.apa-lead mark.apa-kw {
+  padding: .05em .22em;
+  border-radius: 3px;
+  font-weight: 600;
+  background: transparent;
+  color: inherit;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.apa-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-top: .5rem;
+}
+
+.apa-legend-title {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #6c757d;
+}
+
+.apa-legend-chip {
+  padding: .1rem .4rem;
+  border-radius: 3px;
+  font-size: .72rem;
+  font-weight: 600;
+}
+
+/* 1C: embedded player. Sits above the original link, which is left in place. */
+.apa-audio {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .65rem;
+  margin: .2rem 0 .45rem 0;
+}
+
+.apa-audio .apa-audio-el {
+  height: 36px;
+  width: 320px;
+  max-width: 100%;
+}
+
+.apa-audio .apa-audio-error {
+  font-size: .8rem;
+  color: #842029;
+}
+
+/* Prevent long unbroken URLs (e.g. signal.alertpage.net signed JWT media tokens)
+   from stretching the page or overflowing columns if displayed or restored. */
+.form-control-static,
+.form-control-static a,
+.apa-audio a,
+.apa-lead a {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* ---- Internal Notes label row: label left, quick-fill pills right ---- */
+
+/* Same reasoning as label.apa-head below: this is AlertPage's own <label>, and its
+   Bootstrap utility classes set display with !important, so ours must too. */
+label.apa-notes-label-row {
+  display: flex !important;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .35rem .6rem;
+  width: 100%;
+}
+
+.apa-notes-pills {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+
+.apa-pill {
+  padding: .1rem .5rem;
+  border: 1px solid #ced4da;
+  border-radius: 999px;
+  background-color: #f1f3f5;
+  color: #495057;
+  font-size: .72rem;
+  font-weight: 600;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.apa-pill:hover {
+  background-color: #e9ecef;
+  border-color: #adb5bd;
+}
+
+/* ---- header row: lead id + timestamp left, county right ---- */
+
+/* This is AlertPage's own <label>, so the type selector outranks .control-label.
+   display is forced because the utility classes on this page are all !important. */
+label.apa-head {
+  display: flex !important;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .4rem 1.5rem;
+  width: 100%;
+}
+
+.apa-head-left {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+
+/* AlertPage renders the timestamp with .text-muted, which sets colour !important. */
+.apa-lead-time {
+  font-size: 1.1em;
+  color: #000 !important;
+}
+
+.apa-head-right {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  gap: 1rem;
+}
+
+.apa-head-county {
+  text-align: right;
+  line-height: 1.25;
+}
+
+.apa-head-county-label {
+  display: block;
+  font-weight: 600;
+  font-size: .75rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #000;
+}
+
+.apa-head-county-value {
+  display: block;
+  font-size: 1.1em;
+  font-weight: 400;
+  color: #000;
+}
+
+/* ---- Data Feed link (Phase 3) ---- */
+
+/* An <a>, not a <button>: same-tab navigation, but ctrl/middle-click still opens a
+   new tab, and an anchor cannot be mistaken for a form submit. Sized to sit level
+   with the county block rather than tower over it. */
+a.apa-data-feed-link {
+  display: inline-block;
+  flex: none;
+  padding: .3rem .65rem;
+  border: 1px solid #adb5bd;
+  border-radius: .25rem;
+  background-color: #f8f9fa;
+  color: #000 !important;      /* beats .text-muted inheritance in this label */
+  font-size: .85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+a.apa-data-feed-link:hover,
+a.apa-data-feed-link:focus {
+  background-color: #e9ecef;
+  border-color: #6c757d;
+}
+
+/* ---- Monitor button ----
+ *
+ * Always shown. Fills the chat's own #chat-text-box-1 with /m <county> and stops
+ * there, unless monitorAutoSendEnabled is on, in which case it also clicks
+ * #msg-submit-1. Sits directly beside the page's own "Lead Details" <h2>. */
+button.apa-monitor-button {
+  display: inline-block;
+  margin-left: .5rem;
+  padding: .2rem .55rem;
+  border: 1px solid #8A1B8F;
+  border-radius: .25rem;
+  background-color: #8A1B8F;
+  color: #fff;
+  font-size: .8rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+button.apa-monitor-button:hover,
+button.apa-monitor-button:focus {
+  background-color: #711775;
+  border-color: #711775;
+}
+
+/* Set after a monitorAutoSendEnabled click actually sends; stays for this lead. */
+button.apa-monitor-button--active,
+button.apa-monitor-button--active:hover,
+button.apa-monitor-button--active:focus {
+  background-color: #2e7d32;
+  border-color: #2e7d32;
+}
+
+/* ---- Dark mode (Phase: theme) ----
+ *
+ * Opt-in via the popup's toggle, stored as apa.settings.darkMode, applied by
+ * working-screen.js as html[data-apa-theme="dark"]. Every property here that could
+ * lose to AlertPage's own Bootstrap utility classes is !important for the same reason
+ * the rest of this file already is in places - .text-muted and friends set colour and
+ * display !important, and a plain override loses to them silently.
+ *
+ * Repaints only - nothing here changes layout, removes anything, or touches AlertPage's
+ * own class list. Selectors are the real ones from captures/working-screen/working-screen.html
+ * (app-wrapper/app-container/app-header/app-sidebar/applet-*/chat-*/modal-* etc.).
+ */
+
+html[data-apa-theme="dark"] {
+  color-scheme: dark;
+}
+
+html[data-apa-theme="dark"] body,
+html[data-apa-theme="dark"] .app-wrapper,
+html[data-apa-theme="dark"] .app-container {
+  background-color: #151515 !important;
+}
+
+html[data-apa-theme="dark"] .app-header,
+html[data-apa-theme="dark"] .app-sidebar {
+  background-color: #16181c !important;
+  border-color: #2d3239 !important;
+}
+
+/* .portlet-body wraps Lead Details + Sent Alerts side by side; .applet-cnt and
+   .applet-sidebar are each one column's own wrapper (working-screen.html:371, :1438).
+   Painting all three the same fill as the actual card (.applet-container, below) left
+   no visible gap between the two panels, or between them and the page background -
+   the whole region read as one continuous slab. Transparent here lets the page's own
+   background (body/.app-container, #151515 above) show through as that gap. */
+html[data-apa-theme="dark"] .portlet-body,
+html[data-apa-theme="dark"] .applet-cnt,
+html[data-apa-theme="dark"] .applet-sidebar {
+  background-color: transparent !important;
+}
+
+html[data-apa-theme="dark"] .applet-container,
+html[data-apa-theme="dark"] .applet-body,
+html[data-apa-theme="dark"] .applet-head,
+html[data-apa-theme="dark"] .applet-footer {
+  background-color: #1c1f24 !important;
+  border-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .control-label,
+html[data-apa-theme="dark"] label,
+html[data-apa-theme="dark"] .form-control-static,
+html[data-apa-theme="dark"] h1,
+html[data-apa-theme="dark"] h2,
+html[data-apa-theme="dark"] h3,
+html[data-apa-theme="dark"] h4,
+html[data-apa-theme="dark"] h5 {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .text-muted {
+  color: #9ca3af !important;
+}
+
+html[data-apa-theme="dark"] .form-control,
+html[data-apa-theme="dark"] input[type="text"],
+html[data-apa-theme="dark"] input[type="number"],
+html[data-apa-theme="dark"] input[type="email"],
+html[data-apa-theme="dark"] input[type="tel"],
+html[data-apa-theme="dark"] select,
+html[data-apa-theme="dark"] textarea {
+  background-color: #23272e !important;
+  border-color: #3b424d !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .form-control::placeholder,
+html[data-apa-theme="dark"] textarea::placeholder {
+  color: #6b7280 !important;
+}
+
+html[data-apa-theme="dark"] .form-control:disabled,
+html[data-apa-theme="dark"] .form-control[readonly],
+html[data-apa-theme="dark"] select:disabled {
+  background-color: #181a1f !important;
+  border-color: #2d3239 !important;
+  color: #8b949e !important;
+}
+
+html[data-apa-theme="dark"] .btn.default {
+  background-color: #23272e !important;
+  border-color: #3b424d !important;
+  color: #e6edf3 !important;
+}
+
+/* .app-checkbox is the <label> wrapping a checkbox + its text (working-screen.html:
+   999, 1073-1127, 1410, 1426), not a button - grouping it with .btn.default above
+   painted a button-like chip behind every "1-Fire"/"Logout"/etc. label that light
+   mode never has. Text colour only; the checkbox square itself carries no class of
+   ours to theme. */
+html[data-apa-theme="dark"] .app-checkbox {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .dropdown-menu,
+html[data-apa-theme="dark"] .user-menu {
+  background-color: #1c1f24 !important;
+  border-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .modal-content {
+  background-color: #1c1f24 !important;
+  border-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .modal-header,
+html[data-apa-theme="dark"] .modal-footer {
+  border-color: #2d3239 !important;
+}
+
+html[data-apa-theme="dark"] .modal-title,
+html[data-apa-theme="dark"] .modal-body,
+html[data-apa-theme="dark"] .delete-modal {
+  color: #e6edf3 !important;
+}
+
+/* working-screen.html:345 - the "Working Screen" title bar (Link / timer / New Lead /
+   Cancel & Logout). Left white by the rules above because it carries none of the
+   classes those target - it is AlertPage's own applet-head-adjacent bar, not
+   Bootstrap bg-light or an .applet-* class. */
+html[data-apa-theme="dark"] .app-head {
+  background-color: #16181c !important;
+  border-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+html[data-apa-theme="dark"] .app-head h1 {
+  color: #e6edf3 !important;
+}
+
+/* working-screen.html:989 - the bordered "Address" panel. bg-light is Bootstrap's own
+   utility class (#f8f9fa) and .border is Bootstrap's #dee2e6 border, both !important
+   in their source, so both need naming here rather than relying on a generic .border
+   rule elsewhere in this file. */
+html[data-apa-theme="dark"] .address-fields,
+html[data-apa-theme="dark"] .bg-light {
+  background-color: #1c1f24 !important;
+  border-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+html[data-apa-theme="dark"] .border {
+  border-color: #2d3239 !important;
+}
+
+/* working-screen.html:1674 - the floating chat panel's own outer box (draggable/
+   resizable via jQuery UI - not captured in the static HTML, so its border/shadow
+   come from AlertPage's app.css, not visible in any selector here otherwise). Its
+   outline stayed a light default even with .chat-head/.chat-body themed dark. */
+html[data-apa-theme="dark"] .chat-box {
+  background-color: #1c1f24 !important;
+  border: 1px solid #2d3239 !important;
+  box-shadow: 0 0 10px rgba(0, 0, 0, .6) !important;
+}
+
+/* The chat body (working-screen.html:1695, .dispatcher-right .chat-body caps it at
+   calc(100vh - 496px)) and the Sent Alerts list (:1444, .applet-body.scroll, capped
+   at 400px) are the two places on this page that scroll on their own. Dark mode
+   only - light mode keeps the browser/OS default scrollbar. */
+html[data-apa-theme="dark"] .chat-body,
+html[data-apa-theme="dark"] .applet-body.scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #5D5C5A transparent;
+}
+
+html[data-apa-theme="dark"] .chat-body::-webkit-scrollbar,
+html[data-apa-theme="dark"] .applet-body.scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+html[data-apa-theme="dark"] .chat-body::-webkit-scrollbar-track,
+html[data-apa-theme="dark"] .applet-body.scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html[data-apa-theme="dark"] .chat-body::-webkit-scrollbar-thumb,
+html[data-apa-theme="dark"] .applet-body.scroll::-webkit-scrollbar-thumb {
+  background-color: #5D5C5A;
+  border-radius: 4px;
+}
+
+/* working-screen.html:1675 - the chat panel's own title bar, separate from .chat-body
+   below it. */
+html[data-apa-theme="dark"] .chat-head {
+  background-color: #16181c !important;
+  border-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+html[data-apa-theme="dark"] .chat-head span {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .chat-body,
+html[data-apa-theme="dark"] .msg-inbox {
+  background-color: #1c1f24 !important;
+}
+
+/* working-screen.html:1699 - the input row at the bottom of the chat panel. The
+   input itself is a plain .form-control (already dark-themed above); .chat-footer
+   is its own wrapper and was left at its default white, showing through around it. */
+html[data-apa-theme="dark"] .chat-footer {
+  background-color: #16181c !important;
+  border-color: #2d3239 !important;
+}
+
+/* working-screen.html:1991 - .received-msg is the row wrapper (sender badge + time,
+   then the bubble). It carries its own white background from AlertPage's own
+   (uncaptured) stylesheet, same as .chat-body/.msg-inbox around it below - forcing
+   both to the identical #1c1f24 erased the row from the panel behind it, so
+   consecutive messages read as one dark blob with only the bubble's own colour
+   (.received-msg-inbox) showing through. Transparent here lets .chat-body's fill
+   show as the gap between rows; only the actual bubble should carry its own colour. */
+html[data-apa-theme="dark"] .received-msg {
+  background-color: transparent !important;
+  color: #e6edf3 !important;
+  margin-bottom: .35rem;
+}
+html[data-apa-theme="dark"] .received-msg .time {
+  color: #9ca3af !important;
+}
+
+html[data-apa-theme="dark"] .received-msg-inbox {
+  background-color: transparent !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .outgoing-msg {
+  background-color: #173a5e !important;
+  color: #e6edf3 !important;
+}
+
+/* jQuery UI autocomplete (Jurisdiction et al.) is injected at runtime, not present in
+   the static capture - included defensively since the classes are standard. */
+html[data-apa-theme="dark"] .ui-autocomplete {
+  background-color: #1c1f24 !important;
+  border-color: #3b424d !important;
+  color: #e6edf3 !important;
+}
+html[data-apa-theme="dark"] .ui-menu-item,
+html[data-apa-theme="dark"] .ui-menu-item-wrapper {
+  color: #e6edf3 !important;
+}
+
+/* bootstrap-multiselect (davidstutz) upgrades #sub-type-select and #prim-lead-select -
+   confirmed live 2026-09-02, not just the plugin file being loaded (selectors.js had
+   this UNVERIFIED). Its own stylesheet (bootstrap-multiselect.css, loaded from
+   AlertPage's CDN) styles the toggle button and dropdown itself, which our generic
+   .btn.default / .dropdown-menu rules above don't reach - the plugin's classes are
+   more specific, so its light-theme rules win without these. */
+html[data-apa-theme="dark"] .multiselect.dropdown-toggle,
+html[data-apa-theme="dark"] .multiselect-container.dropdown-menu {
+  background-color: #23272e !important;
+  border-color: #3b424d !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .multiselect-container li a,
+html[data-apa-theme="dark"] .multiselect-container li label,
+html[data-apa-theme="dark"] .multiselect-container .checkbox,
+html[data-apa-theme="dark"] .multiselect-selected-text {
+  background-color: transparent !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .multiselect-container li a:hover,
+html[data-apa-theme="dark"] .multiselect-container li a:focus,
+html[data-apa-theme="dark"] .multiselect-container li.active a {
+  background-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .multiselect-search,
+html[data-apa-theme="dark"] .multiselect-filter .form-control {
+  background-color: #181a1f !important;
+  border-color: #3b424d !important;
+  color: #e6edf3 !important;
+}
+
+/* Generic fallback for the same hover/active-row problem on any other Bootstrap
+   dropdown (.active/.dropdown-item both default to a light grey highlight). */
+html[data-apa-theme="dark"] .dropdown-menu li > a:hover,
+html[data-apa-theme="dark"] .dropdown-menu li > a:focus,
+html[data-apa-theme="dark"] .dropdown-item:hover,
+html[data-apa-theme="dark"] .dropdown-item:focus,
+html[data-apa-theme="dark"] .dropdown-item.active {
+  background-color: #2d3239 !important;
+  color: #e6edf3 !important;
+}
+
+/* ---- Dark mode: this extension's own elements ---- */
+
+html[data-apa-theme="dark"] .apa-lead,
+html[data-apa-theme="dark"] .apa-lead .apa-value,
+html[data-apa-theme="dark"] .apa-lead .apa-field-feed .apa-value {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .apa-lead .apa-label,
+html[data-apa-theme="dark"] .apa-lead .apa-label-transcript {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .apa-lead .apa-transcript {
+  background-color: #181a1f !important;
+  border-color: #30363d !important;
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .apa-lead .apa-field-extra .apa-value {
+  color: #9ca3af !important;
+}
+
+html[data-apa-theme="dark"] .apa-lead-raw-toggle {
+  color: #9ca3af !important;
+}
+html[data-apa-theme="dark"] .apa-lead-raw-toggle:hover {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] .apa-legend-title {
+  color: #9ca3af !important;
+}
+
+/* Native <audio controls> ignore an ancestor's color-scheme for their own chrome -
+   it has to be set on the element itself for Chromium to draw the dark variant. */
+html[data-apa-theme="dark"] .apa-audio .apa-audio-el {
+  color-scheme: dark;
+}
+
+html[data-apa-theme="dark"] .apa-audio .apa-audio-error {
+  color: #ff8a8a !important;
+}
+
+html[data-apa-theme="dark"] .apa-pill {
+  background-color: #282c34 !important;
+  border-color: #3d4450 !important;
+  color: #d1d5db !important;
+}
+html[data-apa-theme="dark"] .apa-pill:hover {
+  background-color: #323844 !important;
+  border-color: #4b5563 !important;
+}
+
+html[data-apa-theme="dark"] .apa-lead-time,
+html[data-apa-theme="dark"] .apa-head-county-label,
+html[data-apa-theme="dark"] .apa-head-county-value {
+  color: #e6edf3 !important;
+}
+
+html[data-apa-theme="dark"] a.apa-data-feed-link {
+  background-color: #23272e !important;
+  border-color: #3b424d !important;
+  color: #e6edf3 !important;
+}
+html[data-apa-theme="dark"] a.apa-data-feed-link:hover,
+html[data-apa-theme="dark"] a.apa-data-feed-link:focus {
+  background-color: #2d3239 !important;
+  border-color: #4b5563 !important;
+}
+
+html[data-apa-theme="dark"] button.apa-monitor-button:hover,
+html[data-apa-theme="dark"] button.apa-monitor-button:focus {
+  background-color: #9d2ba3 !important;
+  border-color: #9d2ba3 !important;
+}
+html[data-apa-theme="dark"] button.apa-monitor-button--active,
+html[data-apa-theme="dark"] button.apa-monitor-button--active:hover,
+html[data-apa-theme="dark"] button.apa-monitor-button--active:focus {
+  background-color: #388e3c !important;
+  border-color: #388e3c !important;
+}

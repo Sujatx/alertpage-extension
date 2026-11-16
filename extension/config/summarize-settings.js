@@ -29,6 +29,14 @@
   // stingy here just because she's waiting.
   var GEMINI_REQUEST_TIMEOUT_MS = 45000;
 
+  // A single 429 is usually a burst against the free tier's per-minute cap, not
+  // real exhaustion - one short wait and one retry clears most of them before she
+  // ever sees an error. GEMINI_MIN_GAP_MS additionally spaces out her own
+  // automatic calls (Lead Status fires on every lead open) so this extension is
+  // less likely to be the thing that causes the burst in the first place.
+  var GEMINI_RATE_LIMIT_RETRY_MS = 3000;
+  var GEMINI_MIN_GAP_MS = 1100;
+
   // How many transmissions before the trigger to include, and how close a
   // transmission's timestamp has to be to the lead's audio-URL epoch to count as
   // the trigger itself. See lib/transmissions.js.
@@ -43,6 +51,16 @@
   var MAX_FETCH_PAGES_PER_ATTEMPT = 2;
   var PER_PAGE = 300;
 
+  // Results come back descending by transmission_time_stamp (see docs/FINDINGS.md),
+  // and a fetch attempt is capped at MAX_FETCH_PAGES_PER_ATTEMPT * PER_PAGE records.
+  // If the window's end were always "now", clicking Summarize on a lead that's been
+  // sitting a while - on a busy, non-talkgroup-scoped system - would burn that whole
+  // cap on traffic between the trigger and now and never reach back far enough to
+  // even see the anchor, no matter how far LOOKBACK_BACKOFF_STEPS_SEC widens the
+  // start. Anchoring the end to the trigger instead keeps the fetch centered on the
+  // actual incident regardless of how stale the lead is by the time she clicks.
+  var AFTER_TRIGGER_WINDOW_SEC = 30 * 60;
+
   // Buffer around a cited transmission's timestamp when jumping the Data Feed to
   // it from a Summarize hyperlink - wider than the anchor-match tolerance so the
   // page's own custom-range fetch reliably includes it.
@@ -54,11 +72,14 @@
     GEMINI_MODEL: GEMINI_MODEL,
     GEMINI_GENERATE_PATH: GEMINI_GENERATE_PATH,
     GEMINI_REQUEST_TIMEOUT_MS: GEMINI_REQUEST_TIMEOUT_MS,
+    GEMINI_RATE_LIMIT_RETRY_MS: GEMINI_RATE_LIMIT_RETRY_MS,
+    GEMINI_MIN_GAP_MS: GEMINI_MIN_GAP_MS,
     SUMMARIZE_BEFORE_COUNT: SUMMARIZE_BEFORE_COUNT,
     EPOCH_TOLERANCE_SEC: EPOCH_TOLERANCE_SEC,
     LOOKBACK_BACKOFF_STEPS_SEC: LOOKBACK_BACKOFF_STEPS_SEC,
     MAX_FETCH_PAGES_PER_ATTEMPT: MAX_FETCH_PAGES_PER_ATTEMPT,
     PER_PAGE: PER_PAGE,
+    AFTER_TRIGGER_WINDOW_SEC: AFTER_TRIGGER_WINDOW_SEC,
     JUMP_WINDOW_MINUTES: JUMP_WINDOW_MINUTES
   };
 

@@ -59,6 +59,14 @@
       <span>Enable Summarize</span>
       <span class="switch"><input type="checkbox" id="llmEnabled"><span class="slider"></span></span>
     </label>
+    <label class="row toggle">
+      <span>Lead status indicator</span>
+      <span class="switch"><input type="checkbox" id="relevanceEnabled"><span class="slider"></span></span>
+    </label>
+    <div class="row feedback">
+      <span id="feedbackCount" class="hint">No corrections recorded yet.</span>
+      <button type="button" id="feedbackClear" class="btn">Clear</button>
+    </div>
     <div class="rule-head">
       <input type="password" id="llmApiKey" placeholder="Gemini API key" autocomplete="off">
       <button type="button" id="llmApiKeyToggle" class="btn icon-btn" title="Show key" aria-label="Show key"></button>

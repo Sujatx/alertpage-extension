@@ -112,7 +112,7 @@
 .apa-df-summary-copy {
   display: inline-flex;
   align-items: center;
-  margin-left: .4rem;
+  margin-left: auto;
   padding: .15rem;
   border: 0;
   background: none;

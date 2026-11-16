@@ -73,6 +73,11 @@
       confirmed: true,
       note: 'working-screen.html:379 - <h2>Lead Details</h2> inside .applet-head.is'
     },
+    leadDetailsHead: {
+      sel: '#lead-form .applet-head.is',
+      confirmed: true,
+      note: 'working-screen.html:378 - the row itself. Holds the <h2>, our Monitor button, and the page\'s own .action "Pending Leads" counter'
+    },
     // Only room 1 initializes for this dispatcher role - see FINDINGS.md "Chat WebSocket".
     chatInput: {
       sel: '#chat-text-box-1',

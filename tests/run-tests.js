@@ -24,6 +24,10 @@ var DFC = require(path.join(ROOT, 'extension/config/data-feed-settings.js'));
 var TRANS = require(path.join(ROOT, 'extension/lib/transmissions.js'));
 var SUM = require(path.join(ROOT, 'extension/lib/summarize.js'));
 var SSC = require(path.join(ROOT, 'extension/config/summarize-settings.js'));
+// Config before lib: lib/relevance.js reads the category list off globalThis.APA
+// when it is already there, exactly as it does under importScripts in the worker.
+var RC = require(path.join(ROOT, 'extension/config/relevance.js'));
+var REL = require(path.join(ROOT, 'extension/lib/relevance.js'));
 
 var passed = 0;
 var failed = [];
@@ -924,6 +928,11 @@ describe('summarize-settings config', function () {
   it('carries a non-empty lookback backoff ceiling', function () {
     ok(SSC.LOOKBACK_BACKOFF_STEPS_SEC.length >= 2, 'has backoff steps');
   });
+
+  it('caps the after-trigger window well under a single fetch page', function () {
+    ok(SSC.AFTER_TRIGGER_WINDOW_SEC > 0, 'has an after-trigger window');
+    ok(SSC.AFTER_TRIGGER_WINDOW_SEC < 3600, 'stays well under an hour');
+  });
 });
 
 describe('default settings', function () {
@@ -939,6 +948,579 @@ describe('default settings', function () {
     var stored = { darkMode: true };
     var merged = Object.assign({}, K.DEFAULT_SETTINGS, stored);
     eq(merged.darkMode, true);
+  });
+});
+
+describe('relevance config', function () {
+  it('defines exactly the five incident types her team works', function () {
+    eq(RC.CATEGORY_IDS, [
+      'STRUCTURE_FIRE', 'VEHICLE_INTO_BUILDING', 'WATER_LEAK',
+      'BASEMENT_FLOODING', 'APPLIANCE_FIRE'
+    ]);
+  });
+
+  it('gives every category a label and a prompt description', function () {
+    RC.CATEGORIES.forEach(function (c) {
+      ok(c.label, c.id + ' has a label');
+      ok(c.description && c.description.length > 20, c.id + ' has a description');
+    });
+  });
+
+  it('carries a not-ours contrast set for the prompt', function () {
+    ok(RC.NOT_OURS_EXAMPLES.length >= 4, 'has contrast examples');
+  });
+
+  // Bumped whenever the prompt or categories change, so a verdict cached under the
+  // old wording is re-asked instead of sitting on screen for the rest of the TTL.
+  it('carries a cache version that moves with the prompt', function () {
+    ok(RC.VERDICT_CACHE_VERSION >= 1, 'has a cache version');
+  });
+});
+
+describe('buildPrompt / buildRequestBody (relevance)', function () {
+  var lead = {
+    feed: 'FDNY Analog (BCFY Calls) - Queens Dispatch',
+    category: 'General Fire',
+    keywords: 'fire in',
+    county: 'Queens',
+    state: 'New York',
+    transcript: 'All hands for fire in the rear of the first floor of a three story building.'
+  };
+
+  it('names every category her team works', function () {
+    var prompt = REL.buildPrompt(lead);
+    RC.CATEGORY_IDS.forEach(function (id) {
+      ok(prompt.indexOf(id) !== -1, id + ' present in prompt');
+    });
+  });
+
+  it('tells the model to judge the incident rather than match words', function () {
+    var prompt = REL.buildPrompt(lead);
+    ok(prompt.indexOf('Do not match on individual words') !== -1, 'anti-keyword instruction present');
+  });
+
+  // The rule that protects against the one expensive mistake this feature can make.
+  it('tells the model to answer UNCLEAR rather than guess NOT_RELEVANT', function () {
+    var prompt = REL.buildPrompt(lead);
+    ok(prompt.indexOf('answer UNCLEAR') !== -1, 'UNCLEAR instruction present');
+    ok(prompt.indexOf('Never answer NOT_RELEVANT just because you are unsure') !== -1,
+      'unsure-is-not-red instruction present');
+  });
+
+  it('demotes AlertPage own tagging to context rather than evidence', function () {
+    var prompt = REL.buildPrompt(lead);
+    ok(prompt.indexOf('the transcript decides') !== -1, 'tagging demoted to context');
+  });
+
+  /*
+   * The regression this rule exists for: a real lead reading "172 water flow
+   * activation" - a sprinkler alarm signal - came back green as a WATER_LEAK. An
+   * alarm reporting a condition is not the condition, and the same confusion would
+   * turn any fire alarm activation into a structure fire.
+   */
+  it('tells the model an alarm is not the incident it reports', function () {
+    var prompt = REL.buildPrompt(lead);
+    ok(prompt.indexOf('An alarm is not the thing it is reporting') !== -1,
+      'alarm-is-not-the-incident rule present');
+    ok(prompt.indexOf('waterflow or sprinkler alarm activation is an alarm, NOT a water leak') !== -1,
+      'waterflow case spelled out');
+  });
+
+  it('carves alarm signals out of the category definitions themselves', function () {
+    var prompt = REL.buildPrompt(lead);
+    ok(/WATER_LEAK:.*alarm, not this/.test(prompt), 'WATER_LEAK excludes alarm signals');
+    ok(/STRUCTURE_FIRE:.*alarm, not this/.test(prompt), 'STRUCTURE_FIRE excludes alarm signals');
+  });
+
+  it('embeds the transcript', function () {
+    ok(REL.buildPrompt(lead).indexOf(lead.transcript) !== -1, 'transcript present');
+  });
+
+  it('omits absent optional context instead of printing empty labels', function () {
+    var prompt = REL.buildPrompt({ transcript: 'Smoke showing.' });
+    eq(prompt.indexOf('Source:'), -1);
+    eq(prompt.indexOf('Location:'), -1);
+  });
+
+  it('builds a request body carrying the response schema', function () {
+    var body = REL.buildRequestBody(lead);
+    eq(body.generationConfig.temperature, 0);
+    eq(body.generationConfig.responseMimeType, 'application/json');
+    eq(body.generationConfig.responseSchema, REL.RESPONSE_SCHEMA);
+    ok(body.contents[0].parts[0].text.indexOf(lead.transcript) !== -1, 'prompt embedded');
+  });
+});
+
+describe('parseRelevanceResponse', function () {
+  function apiResponse(structured) {
+    return { candidates: [{ content: { parts: [{ text: JSON.stringify(structured) }] } }] };
+  }
+
+  it('accepts a well-formed verdict', function () {
+    var out = REL.parseRelevanceResponse(apiResponse({
+      status: 'RELEVANT', category: 'STRUCTURE_FIRE', quote: 'fire in the rear', reason: 'Building fire.'
+    }));
+    eq(out.ok, true);
+    eq(out.structured.category, 'STRUCTURE_FIRE');
+  });
+
+  it('rejects an unknown status', function () {
+    var out = REL.parseRelevanceResponse(apiResponse({ status: 'MAYBE', category: null, quote: null, reason: 'x' }));
+    eq(out, { ok: false, reason: 'bad-response-shape' });
+  });
+
+  it('rejects a malformed envelope', function () {
+    eq(REL.parseRelevanceResponse({}), { ok: false, reason: 'bad-response-shape' });
+  });
+
+  it('rejects text that is not JSON', function () {
+    var out = REL.parseRelevanceResponse({ candidates: [{ content: { parts: [{ text: 'sorry, I cannot' }] } }] });
+    eq(out, { ok: false, reason: 'bad-response-shape' });
+  });
+});
+
+/*
+ * The adversarial block. Every case here is one where the model has said something
+ * the UI must not take at face value, and the required outcome is grey - never red.
+ * A fabricated quote is not evidence that a lead is safe to skip.
+ */
+describe('verifyVerdict', function () {
+  var transcript = 'All hands for fire in the rear of the first floor of a three story building.';
+
+  it('passes a relevant verdict whose quote is verbatim', function () {
+    var v = REL.verifyVerdict({
+      status: 'RELEVANT', category: 'STRUCTURE_FIRE',
+      quote: 'fire in the rear of the first floor', reason: 'Fire inside a building.'
+    }, transcript);
+    eq(v.status, 'RELEVANT');
+    eq(v.categoryId, 'STRUCTURE_FIRE');
+    eq(v.categoryLabel, 'Structure fire');
+    eq(v.quote, 'fire in the rear of the first floor');
+  });
+
+  it('accepts a quote that differs only in case and whitespace', function () {
+    var v = REL.verifyVerdict({
+      status: 'RELEVANT', category: 'STRUCTURE_FIRE',
+      quote: '  FIRE IN THE   REAR ', reason: 'Building fire.'
+    }, transcript);
+    eq(v.status, 'RELEVANT');
+  });
+
+  it('demotes an invented quote to UNCLEAR, not NOT_RELEVANT', function () {
+    var v = REL.verifyVerdict({
+      status: 'RELEVANT', category: 'STRUCTURE_FIRE',
+      quote: 'heavy fire showing from the second floor', reason: 'Building fire.'
+    }, transcript);
+    eq(v.status, 'UNCLEAR');
+    eq(v.categoryId, null);
+    eq(v.quote, null);
+  });
+
+  it('demotes a relevant verdict with no quote at all', function () {
+    var v = REL.verifyVerdict({
+      status: 'RELEVANT', category: 'STRUCTURE_FIRE', quote: null, reason: 'Building fire.'
+    }, transcript);
+    eq(v.status, 'UNCLEAR');
+  });
+
+  it('demotes a relevant verdict with no category', function () {
+    var v = REL.verifyVerdict({
+      status: 'RELEVANT', category: null, quote: 'fire in the rear', reason: 'Building fire.'
+    }, transcript);
+    eq(v.status, 'UNCLEAR');
+  });
+
+  it('demotes a category outside her five', function () {
+    var v = REL.verifyVerdict({
+      status: 'RELEVANT', category: 'BRUSH_FIRE', quote: 'fire in the rear', reason: 'Brush.'
+    }, transcript);
+    eq(v.status, 'UNCLEAR');
+  });
+
+  it('passes NOT_RELEVANT through as red, with its reason', function () {
+    var v = REL.verifyVerdict({
+      status: 'NOT_RELEVANT', category: null, quote: null, reason: 'Medical call, no structure involved.'
+    }, transcript);
+    eq(v.status, 'NOT_RELEVANT');
+    eq(v.reason, 'Medical call, no structure involved.');
+    eq(v.categoryId, null);
+  });
+
+  it('keeps UNCLEAR as UNCLEAR', function () {
+    var v = REL.verifyVerdict({
+      status: 'UNCLEAR', category: null, quote: null, reason: 'Transcript is too garbled to tell.'
+    }, transcript);
+    eq(v.status, 'UNCLEAR');
+    eq(v.reason, 'Transcript is too garbled to tell.');
+  });
+
+  it('survives a missing or empty structured object', function () {
+    eq(REL.verifyVerdict(null, transcript).status, 'UNCLEAR');
+    eq(REL.verifyVerdict({}, transcript).status, 'UNCLEAR');
+  });
+});
+
+/*
+ * Her corrections are the only thing that makes this feature better at her actual
+ * job, so the selection rules get the same scrutiny as verifyVerdict.
+ */
+describe('selectFeedbackExamples', function () {
+  function entry(id, label, at, category) {
+    return { leadId: id, transcript: 'transcript ' + id, label: label, category: category || null, at: at };
+  }
+
+  it('returns nothing when she has not corrected anything', function () {
+    eq(REL.selectFeedbackExamples([], 10), []);
+    eq(REL.selectFeedbackExamples(null, 10), []);
+  });
+
+  it('orders oldest first so the newest ruling is read last', function () {
+    var out = REL.selectFeedbackExamples([
+      entry('c', 'OURS', 300), entry('a', 'OURS', 100), entry('b', 'OURS', 200)
+    ], 10);
+    eq(out.map(function (e) { return e.leadId; }), ['a', 'b', 'c']);
+  });
+
+  it('keeps the newest when more corrections exist than fit', function () {
+    var out = REL.selectFeedbackExamples([
+      entry('old', 'OURS', 1), entry('mid', 'OURS', 2), entry('new', 'OURS', 3)
+    ], 2);
+    eq(out.map(function (e) { return e.leadId; }), ['mid', 'new']);
+  });
+
+  // The failure this balancing exists to prevent: a run of NOT_OURS corrections
+  // filling the whole example budget would teach the model to answer NOT_OURS by
+  // default, which is the expensive direction to be wrong in.
+  it('draws from both labels rather than letting one crowd the other out', function () {
+    var out = REL.selectFeedbackExamples([
+      entry('n1', 'NOT_OURS', 10), entry('n2', 'NOT_OURS', 9),
+      entry('n3', 'NOT_OURS', 8), entry('n4', 'NOT_OURS', 7),
+      entry('y1', 'OURS', 1)
+    ], 3);
+    var labels = out.map(function (e) { return e.label; });
+    ok(labels.indexOf('OURS') !== -1, 'the lone OURS example survived the cut');
+    eq(out.length, 3);
+  });
+
+  it('ignores entries with no transcript or an unknown label', function () {
+    var out = REL.selectFeedbackExamples([
+      { leadId: 'x', label: 'OURS', at: 1 },
+      entry('y', 'MAYBE', 2),
+      entry('z', 'OURS', 3)
+    ], 10);
+    eq(out.map(function (e) { return e.leadId; }), ['z']);
+  });
+
+  it('respects a zero budget', function () {
+    eq(REL.selectFeedbackExamples([entry('a', 'OURS', 1)], 0), []);
+  });
+});
+
+describe('buildPrompt with her corrections', function () {
+  var lead = { transcript: 'Smoke in the basement of a two story.' };
+  var feedback = [
+    { leadId: '1', transcript: '172 water flow activation, alarm company reporting.', label: 'NOT_OURS', category: null, at: 1 },
+    { leadId: '2', transcript: 'Heavy fire showing from the second floor.', label: 'OURS', category: 'STRUCTURE_FIRE', at: 2 }
+  ];
+
+  it('adds no rulings section when she has corrected nothing', function () {
+    eq(REL.buildPrompt(lead).indexOf('HER OWN PAST RULINGS'), -1);
+  });
+
+  it('renders each correction with the label she gave it', function () {
+    var prompt = REL.buildPrompt(lead, feedback);
+    ok(prompt.indexOf('[NOT OURS] 172 water flow activation') !== -1, 'not-ours example present');
+    ok(prompt.indexOf('[OURS (STRUCTURE_FIRE)] Heavy fire showing') !== -1, 'ours example carries its category');
+  });
+
+  it('tells the model her labels outrank the written guidance', function () {
+    ok(REL.buildPrompt(lead, feedback).indexOf('she is right') !== -1, 'ground-truth framing present');
+  });
+
+  it('still puts the lead itself last, after the rulings', function () {
+    var prompt = REL.buildPrompt(lead, feedback);
+    ok(prompt.indexOf('HER OWN PAST RULINGS') < prompt.indexOf('--- LEAD ---'), 'rulings precede the lead');
+    ok(prompt.indexOf(lead.transcript) > prompt.indexOf('--- LEAD ---'), 'lead transcript comes last');
+  });
+
+  it('truncates a long correction rather than blowing out the prompt', function () {
+    var long = new Array(900).join('x');
+    var prompt = REL.buildPrompt(lead, [{ leadId: '1', transcript: long, label: 'OURS', category: null, at: 1 }]);
+    ok(prompt.indexOf(long) === -1, 'full long transcript not embedded');
+    ok(prompt.indexOf('…') !== -1, 'truncation marker present');
+  });
+
+  it('carries the corrections through into the request body', function () {
+    var body = REL.buildRequestBody(lead, feedback);
+    ok(body.contents[0].parts[0].text.indexOf('HER OWN PAST RULINGS') !== -1, 'rulings reach the request');
+  });
+});
+
+describe('cosineSimilarity', function () {
+  it('is 1 for identical vectors', function () {
+    eq(Math.round(REL.cosineSimilarity([1, 2, 3], [1, 2, 3]) * 1000) / 1000, 1);
+  });
+
+  it('is scale invariant, so rounding stored vectors cannot skew it', function () {
+    eq(Math.round(REL.cosineSimilarity([1, 2, 3], [2, 4, 6]) * 1000) / 1000, 1);
+  });
+
+  it('is 0 for orthogonal vectors', function () {
+    eq(REL.cosineSimilarity([1, 0], [0, 1]), 0);
+  });
+
+  it('returns 0 rather than throwing on mismatched or empty input', function () {
+    eq(REL.cosineSimilarity([1, 2], [1, 2, 3]), 0);
+    eq(REL.cosineSimilarity([], []), 0);
+    eq(REL.cosineSimilarity(null, [1]), 0);
+    eq(REL.cosineSimilarity([0, 0], [1, 1]), 0);
+  });
+});
+
+describe('packVector', function () {
+  it('rounds to the configured precision', function () {
+    eq(REL.packVector([0.123456789, -0.987654321]), [0.1235, -0.9877]);
+  });
+
+  it('rejects empty or non-finite input rather than storing garbage', function () {
+    eq(REL.packVector([]), null);
+    eq(REL.packVector(null), null);
+    eq(REL.packVector([1, NaN]), null);
+    eq(REL.packVector([1, Infinity]), null);
+  });
+});
+
+describe('parseEmbedResponse', function () {
+  it('reads the embedContent singular shape', function () {
+    eq(REL.parseEmbedResponse({ embedding: { values: [0.5, 0.5] } }), { ok: true, vector: [0.5, 0.5] });
+  });
+
+  it('reads the batchEmbedContents plural shape', function () {
+    eq(REL.parseEmbedResponse({ embeddings: [{ values: [0.25] }] }), { ok: true, vector: [0.25] });
+  });
+
+  it('reports a bad shape instead of throwing', function () {
+    eq(REL.parseEmbedResponse({}), { ok: false, reason: 'bad-embed-shape' });
+    eq(REL.parseEmbedResponse(null), { ok: false, reason: 'bad-embed-shape' });
+    eq(REL.parseEmbedResponse({ embedding: { values: [] } }), { ok: false, reason: 'bad-embed-shape' });
+  });
+});
+
+describe('buildEmbedRequestBody', function () {
+  it('states the task as a prefix, since the model takes no task_type', function () {
+    var body = REL.buildEmbedRequestBody('  fire in the rear  ');
+    eq(body.content.parts[0].text, RC.EMBED_TASK_PREFIX + 'fire in the rear');
+    eq(body.taskType, undefined);
+    eq(body.outputDimensionality, RC.EMBED_DIMENSIONS);
+  });
+});
+
+/*
+ * Vectors from different models occupy different spaces, and cosine similarity
+ * between them is meaningless rather than merely imprecise - with nothing to signal
+ * it. These are the tests that keep stale vectors out of every comparison.
+ */
+describe('usableVector', function () {
+  it('accepts a vector stamped with the current embedding version', function () {
+    eq(REL.usableVector({ vector: [1, 2], ev: RC.EMBED_VERSION }), [1, 2]);
+  });
+
+  it('rejects a vector from a different model or dimensionality', function () {
+    eq(REL.usableVector({ vector: [1, 2], ev: 'gemini-embedding-001:768' }), null);
+    eq(REL.usableVector({ vector: [1, 2], ev: RC.EMBED_MODEL + ':256' }), null);
+  });
+
+  it('rejects an unstamped or absent vector', function () {
+    eq(REL.usableVector({ vector: [1, 2] }), null);
+    eq(REL.usableVector({ ev: RC.EMBED_VERSION }), null);
+    eq(REL.usableVector(null), null);
+  });
+
+  it('derives the version from the model and dimensionality together', function () {
+    eq(RC.EMBED_VERSION, RC.EMBED_MODEL + ':' + RC.EMBED_DIMENSIONS);
+  });
+});
+
+describe('nearestNeighbors', function () {
+  function labelled(id, label, vector) {
+    return { leadId: id, transcript: 't' + id, label: label, vector: vector, ev: RC.EMBED_VERSION };
+  }
+  var corpus = [
+    labelled('far', 'OURS', [0, 1]),
+    labelled('near', 'NOT_OURS', [1, 0.05]),
+    labelled('mid', 'OURS', [1, 1])
+  ];
+
+  it('ranks by similarity, closest first', function () {
+    var out = REL.nearestNeighbors([1, 0], corpus, 3);
+    eq(out.map(function (n) { return n.item.leadId; }), ['near', 'mid', 'far']);
+  });
+
+  it('honours k', function () {
+    eq(REL.nearestNeighbors([1, 0], corpus, 1).length, 1);
+  });
+
+  it('skips corrections recorded before vectors existed', function () {
+    var mixed = corpus.concat([{ leadId: 'old', transcript: 'x', label: 'OURS' }]);
+    var ids = REL.nearestNeighbors([1, 0], mixed, 10).map(function (n) { return n.item.leadId; });
+    eq(ids.indexOf('old'), -1);
+  });
+
+  it('skips vectors from a superseded embedding model', function () {
+    var mixed = corpus.concat([
+      { leadId: 'stale', transcript: 'x', label: 'OURS', vector: [1, 0], ev: 'gemini-embedding-001:768' }
+    ]);
+    var ids = REL.nearestNeighbors([1, 0], mixed, 10).map(function (n) { return n.item.leadId; });
+    eq(ids.indexOf('stale'), -1);
+  });
+
+  it('returns nothing without a query vector', function () {
+    eq(REL.nearestNeighbors(null, corpus, 3), []);
+    eq(REL.nearestNeighbors([], corpus, 3), []);
+  });
+});
+
+describe('knnVote', function () {
+  function neighbor(label, similarity) {
+    return { item: { label: label }, similarity: similarity };
+  }
+
+  it('is not confident when nothing clears the similarity floor', function () {
+    var vote = REL.knnVote([neighbor('OURS', 0.1), neighbor('OURS', 0.2)]);
+    eq(vote.confident, false);
+    eq(vote.count, 0);
+  });
+
+  it('is not confident on too few neighbours, however similar', function () {
+    var vote = REL.knnVote([neighbor('NOT_OURS', 0.99), neighbor('NOT_OURS', 0.98)]);
+    eq(vote.count, 2);
+    eq(vote.confident, false);
+  });
+
+  it('is confident when enough close neighbours agree', function () {
+    var vote = REL.knnVote([
+      neighbor('NOT_OURS', 0.95), neighbor('NOT_OURS', 0.9), neighbor('NOT_OURS', 0.85)
+    ]);
+    eq(vote.label, 'NOT_OURS');
+    eq(vote.confident, true);
+    eq(Math.round(vote.agreement * 100), 100);
+  });
+
+  it('is not confident when close neighbours are split', function () {
+    var vote = REL.knnVote([
+      neighbor('NOT_OURS', 0.9), neighbor('OURS', 0.88), neighbor('NOT_OURS', 0.85)
+    ]);
+    eq(vote.confident, false);
+  });
+
+  it('weights a near-duplicate above a merely adjacent neighbour', function () {
+    var vote = REL.knnVote([
+      neighbor('OURS', 0.99), neighbor('OURS', 0.98), neighbor('OURS', 0.97), neighbor('NOT_OURS', 0.73)
+    ]);
+    eq(vote.label, 'OURS');
+    eq(vote.confident, true);
+  });
+});
+
+/*
+ * The cross-check is deliberately one-directional. These tests exist to stop a later
+ * "improvement" from letting neighbours manufacture a red, which is the one mistake
+ * that could cost her a real incident.
+ */
+describe('applyNeighborCheck', function () {
+  var green = { status: 'RELEVANT', categoryId: 'WATER_LEAK', categoryLabel: 'Water leak', reason: 'r', quote: 'q' };
+  var red = { status: 'NOT_RELEVANT', categoryId: null, categoryLabel: '', reason: 'r', quote: null };
+  var grey = { status: 'UNCLEAR', categoryId: null, categoryLabel: '', reason: 'r', quote: null };
+  var sureNotOurs = { label: 'NOT_OURS', agreement: 1, count: 4, confident: true, topSimilarity: 0.9 };
+  var sureOurs = { label: 'OURS', agreement: 1, count: 4, confident: true, topSimilarity: 0.9 };
+  var unsure = { label: 'NOT_OURS', agreement: 0.6, count: 1, confident: false, topSimilarity: 0.8 };
+
+  it('pulls a green down to grey when her own rulings contradict it', function () {
+    var out = REL.applyNeighborCheck(green, sureNotOurs);
+    eq(out.status, 'UNCLEAR');
+    eq(out.categoryId, null);
+    ok(out.reason.indexOf('4 similar leads') !== -1, 'reason names the neighbour count');
+  });
+
+  it('never turns anything into a red', function () {
+    eq(REL.applyNeighborCheck(grey, sureNotOurs).status, 'UNCLEAR');
+    eq(REL.applyNeighborCheck(green, sureOurs).status, 'RELEVANT');
+  });
+
+  it('never promotes a grey to a green, however confident the neighbours', function () {
+    eq(REL.applyNeighborCheck(grey, sureOurs).status, 'UNCLEAR');
+  });
+
+  it('leaves a red alone', function () {
+    eq(REL.applyNeighborCheck(red, sureNotOurs).status, 'NOT_RELEVANT');
+    eq(REL.applyNeighborCheck(red, sureOurs).status, 'NOT_RELEVANT');
+  });
+
+  it('does nothing on an unconfident or absent vote', function () {
+    eq(REL.applyNeighborCheck(green, unsure).status, 'RELEVANT');
+    eq(REL.applyNeighborCheck(green, null).status, 'RELEVANT');
+  });
+});
+
+describe('selectFeedbackExamples ranked by similarity', function () {
+  function labelled(id, label, vector, at) {
+    return { leadId: id, transcript: 'transcript ' + id, label: label, vector: vector, ev: RC.EMBED_VERSION, at: at };
+  }
+
+  // The plateau this whole embedding layer exists to break: recency stops being a
+  // good proxy for relevance once she is past a couple of dozen labels.
+  it('prefers the most similar correction over the most recent one', function () {
+    var corpus = [
+      labelled('similar', 'NOT_OURS', [1, 0], 1),
+      labelled('recent', 'NOT_OURS', [0, 1], 999)
+    ];
+    var out = REL.selectFeedbackExamples(corpus, 1, [1, 0.02]);
+    eq(out.map(function (e) { return e.leadId; }), ['similar']);
+  });
+
+  it('puts the closest match last, nearest the lead itself', function () {
+    var corpus = [
+      labelled('closest', 'OURS', [1, 0], 1),
+      labelled('further', 'OURS', [1, 1], 2)
+    ];
+    var out = REL.selectFeedbackExamples(corpus, 2, [1, 0]);
+    eq(out[out.length - 1].leadId, 'closest');
+  });
+
+  it('falls back to recency when every stored vector is from an older model', function () {
+    var stale = [
+      { leadId: 'old', transcript: 'a', label: 'OURS', vector: [1, 0], ev: 'old:768', at: 1 },
+      { leadId: 'new', transcript: 'b', label: 'OURS', vector: [0, 1], ev: 'old:768', at: 2 }
+    ];
+    eq(REL.selectFeedbackExamples(stale, 1, [1, 0]).map(function (e) { return e.leadId; }), ['new']);
+  });
+
+  it('falls back to recency when no correction has a vector yet', function () {
+    var corpus = [
+      { leadId: 'old', transcript: 'a', label: 'OURS', at: 1 },
+      { leadId: 'new', transcript: 'b', label: 'OURS', at: 2 }
+    ];
+    eq(REL.selectFeedbackExamples(corpus, 1, [1, 0]).map(function (e) { return e.leadId; }), ['new']);
+  });
+
+  it('falls back to recency when the lead itself could not be embedded', function () {
+    var corpus = [
+      labelled('old', 'OURS', [1, 0], 1),
+      labelled('new', 'OURS', [0, 1], 2)
+    ];
+    eq(REL.selectFeedbackExamples(corpus, 1, null).map(function (e) { return e.leadId; }), ['new']);
+  });
+});
+
+describe('relevance default settings', function () {
+  // Off by default: it spends her own Gemini quota on every lead she opens, so an
+  // install that has never seen this field must read as off, not on.
+  it('defaults the lead status indicator off', function () {
+    eq(K.DEFAULT_SETTINGS.relevanceEnabled, false);
+  });
+
+  it('round-trips a stored relevanceEnabled through the default merge', function () {
+    eq(Object.assign({}, K.DEFAULT_SETTINGS, { relevanceEnabled: true }).relevanceEnabled, true);
   });
 });
 

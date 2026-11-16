@@ -522,6 +522,7 @@
     'anchor-not-found': 'Could not confirm which transmission triggered this lead in the Data Feed.',
     'anchor-ambiguous': 'Could not confirm which transmission triggered this lead in the Data Feed.',
     'gemini-error': 'Gemini API error - try again.',
+    'rate-limited': 'Hit the Gemini usage limit - wait a bit and try again.',
     'timeout': 'Gemini did not respond in time - try again.',
     'bad-response-shape': 'Gemini returned something unusable - try again.'
   };

@@ -36,6 +36,7 @@
         "config/keywords.js",
         "config/pills.js",
         "config/data-feed-settings.js",
+        "config/relevance.js",
         "lib/parse-lead.js",
         "lib/highlight.js",
         "lib/notes.js",

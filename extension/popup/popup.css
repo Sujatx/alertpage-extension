@@ -123,12 +123,18 @@ h2 { margin: 0; font-size: 1rem; letter-spacing: .02em; }
 .row { display: block; margin: .35rem 0; font-size: .92rem; }
 
 .row.toggle,
-.row.number {
+.row.number,
+.row.feedback {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: .6rem;
 }
+
+/* The correction count sits as a hint, so it keeps .hint's own margin reset rather
+   than inheriting the paragraph spacing .hint has as a block. */
+.row.feedback .hint { margin: 0; }
+.row.feedback .btn[disabled] { opacity: .5; cursor: default; }
 
 /* Checkbox stays the real input - just visually replaced by .slider, which reads
    its :checked state via the adjacent-sibling selector below. */

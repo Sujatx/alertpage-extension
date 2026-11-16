@@ -6,7 +6,7 @@
  *   apa.pills             - entirely
  *   apa.rules             - the terms of the first category only
  *   apa.settings          - highlightEnabled, footerReshuffleEnabled,
- *                           monitorAutoSendEnabled, darkMode only
+ *                           monitorAutoSendEnabled, darkMode, relevanceEnabled only
  *   apa.dataFeedSettings  - every field except syncEnabled
  *   apa.llmSettings       - apiKey, enabled (BYOK Gemini key for Summarize)
  *
@@ -47,6 +47,9 @@
     highlightEnabled: document.getElementById('highlightEnabled'),
     footerReshuffleEnabled: document.getElementById('footerReshuffleEnabled'),
     monitorAutoSendEnabled: document.getElementById('monitorAutoSendEnabled'),
+    relevanceEnabled: document.getElementById('relevanceEnabled'),
+    feedbackCount: document.getElementById('feedbackCount'),
+    feedbackClear: document.getElementById('feedbackClear'),
     syncSource: document.getElementById('syncSource'),
     syncCounty: document.getElementById('syncCounty'),
     syncTalkgroup: document.getElementById('syncTalkgroup'),
@@ -109,7 +112,8 @@
         highlightEnabled: els.highlightEnabled.checked,
         footerReshuffleEnabled: els.footerReshuffleEnabled.checked,
         monitorAutoSendEnabled: els.monitorAutoSendEnabled.checked,
-        darkMode: state.settings.darkMode === true
+        darkMode: state.settings.darkMode === true,
+        relevanceEnabled: els.relevanceEnabled.checked
       });
       patch[DATA_FEED_KEY] = Object.assign({}, DF.DEFAULT_DATA_FEED_SETTINGS, stored[DATA_FEED_KEY] || {}, {
         syncSource: els.syncSource.checked,
@@ -267,6 +271,8 @@
     // monitorAutoSendEnabled defaults off, so it's read as `=== true` rather than
     // `!== false` - see config/keywords.js.
     els.monitorAutoSendEnabled.checked = state.settings.monitorAutoSendEnabled === true;
+    // Same polarity, same reason: it spends her Gemini quota, so it is opt-in.
+    els.relevanceEnabled.checked = state.settings.relevanceEnabled === true;
     renderThemeToggle();
 
     // syncTalkgroup and syncTimeRange default off, so both are read as `=== true`
@@ -299,8 +305,43 @@
     });
   }
 
+  /*
+   * The corrections she has made on the Working Screen. Read-only here - this panel
+   * only reports the count and offers the reset, because the labelling itself
+   * belongs next to the lead it is about. Clearing is the escape hatch for a run of
+   * mislabels teaching the checker the wrong thing.
+   */
+  var FEEDBACK_KEY = 'apa.leadFeedback';
+
+  function renderFeedbackCount(n) {
+    els.feedbackCount.textContent = n
+      ? 'Learning from ' + n + ' correction' + (n === 1 ? '' : 's') + '.'
+      : 'No corrections recorded yet.';
+    els.feedbackClear.disabled = !n;
+  }
+
+  function loadFeedbackCount() {
+    chrome.storage.local.get([FEEDBACK_KEY], function (got) {
+      if (chrome.runtime.lastError) { renderFeedbackCount(0); return; }
+      var list = (got || {})[FEEDBACK_KEY];
+      renderFeedbackCount(Array.isArray(list) ? list.length : 0);
+    });
+  }
+
+  els.feedbackClear.addEventListener('click', function () {
+    var patch = {};
+    patch[FEEDBACK_KEY] = [];
+    chrome.storage.local.set(patch, function () {
+      say(chrome.runtime.lastError ? 'Could not clear.' : 'Corrections cleared');
+      renderFeedbackCount(0);
+    });
+  });
+
+  loadFeedbackCount();
+
   ['highlightEnabled', 'footerReshuffleEnabled', 'monitorAutoSendEnabled',
-    'syncSource', 'syncCounty', 'syncTalkgroup', 'syncTimeRange', 'llmEnabled'].forEach(function (id) {
+    'syncSource', 'syncCounty', 'syncTalkgroup', 'syncTimeRange', 'llmEnabled',
+    'relevanceEnabled'].forEach(function (id) {
     els[id].addEventListener('change', schedule);
   });
 

@@ -2,12 +2,11 @@
   "manifest_version": 3,
   "name": "AlertPage Working Screen Assist",
   "version": "0.1.0",
-  "description": "Readability, Accessibility, Data Feed sync and an opt-in BYOK Summarize feature for AlertPage.",
+  "description": "Readability, Accessibility and Data Feed sync for AlertPage.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://dispatch.alertpage.net/*",
-    "https://ap-portal.alertpage.net/*",
-    "https://generativelanguage.googleapis.com/*"
+    "https://ap-portal.alertpage.net/*"
   ],
   "background": { "service_worker": "background.js" },
   "icons": {
@@ -36,12 +35,10 @@
         "config/keywords.js",
         "config/pills.js",
         "config/data-feed-settings.js",
-        "config/relevance.js",
         "lib/parse-lead.js",
         "lib/highlight.js",
         "lib/notes.js",
         "lib/lead-feed.js",
-        "lib/transmissions.js",
         "content/working-screen.js"
       ],
       "css": ["content/working-screen.css"]

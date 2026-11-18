@@ -127,12 +127,7 @@
       filterPanel:     { sel: '#filterAccordion',      confirmed: true, note: 'banner is inserted before this' },
       // If either is showing, the session is gone and there is nothing to filter.
       loginModal:      { sel: '#loginModal',           confirmed: true, note: 'auth gate' },
-      mustLoginModal:  { sel: '#mustloginModal',       confirmed: true, note: 'auth gate' },
-
-      // Summarize feature: jump-to-source scrolls/highlights a row here once the page
-      // re-fetches around a cited transmission's timestamp.
-      transmissionList:      { sel: '#transmission-list', confirmed: true, note: 'data-feed.html:383; rebuilt wholesale (innerHTML="") on every ~30s fetch' },
-      transmissionTimestamp: { sel: '.transmission-timestamp[data-timestamp]', confirmed: true, note: 'data-feed.html:1002-1007; data-timestamp is epoch MS (transmission_time_stamp * 1000)' }
+      mustLoginModal:  { sel: '#mustloginModal',       confirmed: true, note: 'auth gate' }
     }
   };
 

@@ -1,249 +1,244 @@
 /*
- * Standalone. This used to layer over options/options.css; that page is gone, so the
- * tokens and the rules the popup actually uses live here now.
+ * Standalone popup styles. Every colour is a token; nothing below the two token blocks
+ * should carry a raw hex value.
  *
- * Every colour is a token. Nothing below this block should carry a raw hex value - if
- * you find yourself typing one, add a token for it instead, or the panel drifts out of
- * step with itself the way it did when the scrollbar was still browser-default.
+ * Layout choices, for whoever changes this next:
+ *   - Two always-visible groups for the switches she flips; the two long editable lists
+ *     (keywords, pills) fold away so the panel opens short (progressive disclosure).
+ *   - One quiet surface, hairline dividers between rows, no card-per-section borders:
+ *     fewer boxes means less for the eye to parse.
+ *   - Red only appears on hover or on the armed "Restore defaults" - not on every row.
  */
 
 :root {
-  /* Without this the browser paints its own widgets - scrollbars above all - using the
-     OS theme, so a dark-mode machine gets a black scrollbar down the side of a light
-     panel. Declaring the scheme is what actually fixes that; the ::-webkit- rules at
-     the bottom only refine what it already got right. */
+  /* Declaring the scheme stops the browser painting its own widgets (scrollbars) from
+     the OS theme - a dark OS would otherwise put a black scrollbar on a light panel. */
   color-scheme: light;
 
-  /* surfaces */
-  --bg: #f5f6f8;
-  --card: #ffffff;
-  --line: #dfe3e8;
-  --hover: #f2f4f7;
+  --bg: #ffffff;
+  --line: #e7e9ed;
+  --hover: #f3f4f6;
+  --chip: #eef1f5;
 
-  /* text */
   --text: #1f2328;
-  --muted: #667085;
+  --muted: #6b7280;
 
-  /* accent */
   --accent: #0b5fff;
-  --accent-hover: #0a52dd;
   --accent-text: #ffffff;
+  --switch-off: #d0d5dd;
 
-  /* danger - the remove buttons and "Restore defaults" */
   --danger: #b42318;
-  --danger-line: #f0c8c4;
-  --danger-hover: #fff5f4;
+  --danger-bg: #fef3f2;
 
-  /* feedback */
   --ok: #067647;
 
-  /* scrollbar */
   --scroll-thumb: #cdd3db;
   --scroll-thumb-hover: #b3bcc7;
 
-  /* shape */
-  --radius: 8px;
-  --radius-sm: 5px;
+  --radius: 6px;
   --radius-pill: 999px;
-
-  --font: 15px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font: 13px/1.4 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* Dark mode: same html[data-apa-theme="dark"] attribute working-screen.css and
-   data-feed.css key off, applied to this document by popup.js's applyTheme() since
-   the popup is its own page, not a content script those files reach. Every rule in
-   this file reads a token, so redefining the tokens here is the whole theme swap -
-   nothing below this block should ever need touching again. */
+/* Same html[data-apa-theme="dark"] hook working-screen.css and data-feed.css use;
+   popup.js sets it on this document. Redefining the tokens is the whole theme swap. */
 html[data-apa-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #151515;
-  --card: #1c1f24;
-  --line: #2d3239;
-  --hover: #23272e;
+  --bg: #1a1d22;
+  --line: #2b3038;
+  --hover: #242931;
+  --chip: #2a3039;
 
   --text: #e6edf3;
   --muted: #9ca3af;
 
   --accent: #4d8dff;
-  --accent-hover: #6ea8fe;
   --accent-text: #ffffff;
+  --switch-off: #3d444f;
 
-  --danger: #ea868f;
-  --danger-line: #5c2b2f;
-  --danger-hover: #2a1518;
+  --danger: #f08b93;
+  --danger-bg: #2c171a;
 
   --ok: #4ade80;
 
-  --scroll-thumb: #5D5C5A;
+  --scroll-thumb: #5d5c5a;
   --scroll-thumb-hover: #726f6c;
 }
 
 * { box-sizing: border-box; }
 
 body {
-  width: 320px;
+  width: 300px;
   margin: 0;
-  padding: .9rem;
+  padding: 10px 12px 8px;
   background: var(--bg);
   color: var(--text);
   font: var(--font);
 }
 
-.pop-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .6rem;
-  margin-bottom: .8rem;
-}
-.pop-head h1 { margin: 0; font-size: 1.05rem; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.theme-toggle {
-  padding: .35rem;
+/* ---- header: title, save confirmation, theme ---- */
+
+.head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.head h1 { margin: 0; font-size: 14px; font-weight: 600; flex: 1 1 auto; }
+
+/* Lives in the header so "Saved" never pushes the layout around below it. */
+.status { font-size: 12px; color: var(--ok); opacity: 0; transition: opacity .2s ease; }
+.status.show { opacity: 1; }
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0;
+  border: 0; border-radius: var(--radius);
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+.icon-btn svg { display: block; }
+
+/* ---- groups and rows ---- */
+
+.group { padding: 6px 0; border-top: 1px solid var(--line); }
+.head + .group { border-top: 0; }
+
+h2, summary {
+  margin: 4px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
   color: var(--muted);
-  border-color: transparent;
-  background: transparent;
 }
-.theme-toggle:hover { background: var(--hover); border-color: var(--line); color: var(--text); }
-.theme-toggle svg { display: block; width: 16px; height: 16px; }
 
-h2 { margin: 0; font-size: 1rem; letter-spacing: .02em; }
-.hint { margin: .3rem 0 .5rem; color: var(--muted); font-size: .78rem; }
-
-.card {
-  background: var(--card);
-  border: 1px solid var(--line);
+/* Whole row is the hit target (Fitts): the label wraps the switch. */
+.row {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 30px;
+  margin: 0 -6px; padding: 0 6px;
   border-radius: var(--radius);
-  padding: .65rem .7rem;
-  margin-bottom: .55rem;
-}
-.card-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-
-.row { display: block; margin: .35rem 0; font-size: .92rem; }
-
-.row.toggle,
-.row.number,
-.row.feedback {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .6rem;
-}
-
-/* The correction count sits as a hint, so it keeps .hint's own margin reset rather
-   than inheriting the paragraph spacing .hint has as a block. */
-.row.feedback .hint { margin: 0; }
-.row.feedback .btn[disabled] { opacity: .5; cursor: default; }
-
-/* Checkbox stays the real input - just visually replaced by .slider, which reads
-   its :checked state via the adjacent-sibling selector below. */
-.switch {
-  position: relative;
-  flex: 0 0 auto;
-  display: inline-block;
-  width: 34px;
-  height: 20px;
-}
-.switch input {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  opacity: 0;
   cursor: pointer;
 }
+.row:hover { background: var(--hover); }
+.row > span:first-child, .grow { flex: 1 1 auto; }
+
+/* ---- switch: the real checkbox, visually replaced by .slider ---- */
+
+.switch { position: relative; flex: none; width: 30px; height: 18px; cursor: pointer; }
+.switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
 .switch .slider {
-  position: absolute;
-  inset: 0;
-  background: var(--line);
-  border-radius: var(--radius-pill);
+  position: absolute; inset: 0;
+  background: var(--switch-off); border-radius: var(--radius-pill);
   transition: background .15s ease;
 }
 .switch .slider::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background: var(--card);
-  border-radius: 50%;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
   transition: transform .15s ease;
 }
 .switch input:checked + .slider { background: var(--accent); }
-.switch input:checked + .slider::before { transform: translateX(14px); }
+.switch input:checked + .slider::before { transform: translateX(12px); }
 .switch input:focus-visible + .slider { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-input[type="text"],
-input[type="number"],
-input[type="password"] {
-  font: inherit;
-  font-size: .88rem;
-  color: var(--text);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: .28rem .45rem;
+/* ---- time window minutes: sits beside its own switch, dims when that is off ---- */
+
+.minutes { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 12px; }
+.minutes.off { opacity: .45; }
+.minutes input {
+  width: 42px; padding: 2px 4px; text-align: right;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg);
 }
 
-/* One text input plus a trash button per row. No card around it - the input already
-   carries a border, and Chrome caps popups at 600px, so every row's chrome costs
-   entries the list can show before it starts scrolling. */
-.rule { margin-bottom: .3rem; }
-.rule-head { display: flex; align-items: center; flex-wrap: nowrap; gap: .35rem; }
-.rule-head input[type="text"],
-.rule-head input[type="password"] { flex: 1 1 auto; min-width: 0; }
+/* ---- foldable lists ---- */
 
-.btn {
-  font: inherit; font-size: .88rem;
-  padding: .4rem .85rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--text);
-  cursor: pointer;
+.fold summary {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 26px; cursor: pointer; list-style: none;
 }
-.btn:hover { background: var(--hover); }
-.btn.ghost { font-size: .82rem; padding: .3rem .65rem; }
-.btn.danger-ghost { color: var(--danger); border-color: var(--danger-line); }
-.btn.danger-ghost:hover { background: var(--danger-hover); }
-.btn.remove {
-  font-size: .78rem;
-  padding: .25rem .55rem;
-  color: var(--danger);
-  border-color: var(--danger-line);
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary::after {
+  content: ""; width: 6px; height: 6px; margin-right: 4px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform .15s ease;
 }
-.btn.remove:hover { background: var(--danger-hover); }
-.btn.icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: .35rem; line-height: 0; }
+.fold[open] summary::after { transform: rotate(45deg); }
+.fold summary:hover { color: var(--text); }
 
-.pop-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
-.pop-actions .btn { flex: 1 1 auto; }
+.count {
+  min-width: 18px; padding: 0 6px; border-radius: var(--radius-pill);
+  background: var(--chip); color: var(--muted);
+  font-size: 11px; text-align: center; letter-spacing: 0;
+}
 
-.status { display: block; margin-top: .5rem; min-height: 1.1em; font-size: .85rem; color: var(--ok); }
+.hint { margin: 4px 0 2px; color: var(--muted); font-size: 11px; }
 
-.made-by { margin-top: .6rem; text-align: center; font-size: .78rem; color: var(--muted); }
-.made-by a { color: var(--muted); text-decoration: underline; }
+/* Keywords as chips: one line holds several, where one input per row held one. */
+.chips {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  max-height: 168px; overflow-y: auto;
+  padding: 4px; border: 1px solid var(--line); border-radius: var(--radius);
+  cursor: text;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 1px 2px 1px 8px; border-radius: var(--radius-pill);
+  background: var(--chip); font-size: 12px;
+}
+.chips input {
+  flex: 1 1 70px; min-width: 70px;
+  padding: 2px 4px; border: 0; background: transparent; outline: none;
+}
+
+.x-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; padding: 0;
+  border: 0; border-radius: var(--radius-pill);
+  background: transparent; color: var(--muted); cursor: pointer;
+  font-size: 14px; line-height: 1;
+}
+.x-btn:hover { background: var(--danger-bg); color: var(--danger); }
+
+/* Pills keep an editable text box each - their text is edited in place, not re-typed. */
+.pill-row { display: flex; align-items: center; gap: 4px; margin: 4px 0; }
+.pill-row input {
+  flex: 1 1 auto; min-width: 0; padding: 4px 6px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg);
+}
+.pill-row .x-btn { width: 24px; height: 24px; border-radius: var(--radius); }
+
+.text-btn {
+  padding: 4px 6px; margin: 0 -6px;
+  border: 0; border-radius: var(--radius);
+  background: transparent; color: var(--accent); cursor: pointer;
+}
+.text-btn:hover { background: var(--hover); }
+
+/* ---- footer ---- */
+
+.foot {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.foot .text-btn { color: var(--muted); }
+.foot .text-btn:hover { color: var(--danger); }
+/* Armed: the second click restores, so it has to look like the destructive act it is. */
+.foot .text-btn.armed { background: var(--danger-bg); color: var(--danger); }
+
+.made-by { color: var(--muted); }
+.made-by a { color: inherit; }
 .made-by a:hover { color: var(--text); }
 
-/* Chrome 121+ honours these; older builds fall through to the ::-webkit- rules below,
-   which are kept in step with them. Track is transparent and the thumb is borderless
-   on purpose - a bordered thumb reads as a sunken gutter against a flat panel. */
-html {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) transparent;
-}
+/* ---- scrollbars ---- */
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; border: 0; }
-::-webkit-scrollbar-thumb {
-  background: var(--scroll-thumb);
-  border: 0;
-  border-radius: var(--radius-pill);
-}
+html, .chips { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: var(--radius-pill); }
 ::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
-::-webkit-scrollbar-corner { background: transparent; }
 
-/* Narrow enough that the label keeps the row's width and the two-digit value it
-   almost always holds still reads without truncation. */
-.row.number input[type="number"] { flex: none; width: 4.5rem; text-align: right; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

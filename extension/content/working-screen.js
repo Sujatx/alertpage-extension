@@ -9,17 +9,11 @@
  *
  * Guardrails, deliberate:
  *   - never clicks, submits, enables, or disables anything on the form
- *   - never makes a network request from this script. Both of that need lives in
- *     background.js, behind chrome.runtime.sendMessage: the Data Feed's system list
- *     (Phase 3), and (Summarize feature, 2026-09-10) /get_transmissions and Gemini.
+  *   - never makes a network request from this script. The one that is needed (the
+ *     Data Feed's system list, Phase 3) lives in background.js, behind
+ *     chrome.runtime.sendMessage.
  *   - never removes existing functionality (the raw audio link stays)
  *   - if anything fails to parse, the page is left exactly as the server rendered it
- *
- * readLeadContext() also captures the lead's own audio URL and, from it, the exact
- * epoch second the transmission that triggered this alert was sent - used later, from
- * the Data Feed side, to anchor the Summarize feature's transcript window (see
- * lib/transmissions.js). Nothing here makes a network request; it just reads the same
- * link findAudioLink()/enhanceAudio() already use for the inline player.
  *
  * The Working Screen is torn down and re-rendered by the server after every lead
  * action (302 -> /web/working-queue/), so this script re-runs from scratch on every
@@ -37,16 +31,12 @@
   var NOTES = APA.notes || {};
   var DF = APA.dataFeed || {};
   var FEED = APA.leadFeed || {};
-  var TRANS = APA.transmissions || {};
-  var RC = APA.relevanceConfig || {};
 
   var RULES_KEY = 'apa.rules';
   var SETTINGS_KEY = 'apa.settings';
   var PILLS_KEY = 'apa.pills';
   var DATA_FEED_KEY = 'apa.dataFeedSettings';
   var ACTIVE_LEAD_KEY = 'apa.activeLead';
-  var VERDICTS_KEY = 'apa.leadVerdicts';
-  var FEEDBACK_KEY = 'apa.leadFeedback';
 
   // ---------------------------------------------------------------- utilities
 
@@ -391,18 +381,11 @@
     var blob = findLeadBlob();
     var parsed = blob ? LEAD.parseLead(blob.textContent) : null;
 
-    var audioLink = findAudioLink();
-    var audioUrl = audioLink
-      ? LEAD.extractAudioUrl(audioLink.textContent, audioLink.getAttribute('onclick'), audioLink.getAttribute('href'))
-      : '';
-
     return {
       leadId: anchor ? String(anchor.textContent || '').trim() : '',
       feed: parsed && parsed.ok ? parsed.feed : '',
       county: countyBareValue(),
-      timestamp: timeEl ? FEED.parseLeadTime(timeEl.textContent) : null,
-      audioUrl: audioUrl || null,
-      triggerEpochSec: audioUrl && TRANS.extractEpochFromAudioUrl ? TRANS.extractEpochFromAudioUrl(audioUrl) : null
+      timestamp: timeEl ? FEED.parseLeadTime(timeEl.textContent) : null
     };
   }
 
@@ -590,363 +573,6 @@
       }
     });
     heading.insertAdjacentElement('afterend', btn);
-  }
-
-  // ----------------------------------------------------------- lead status light
-
-  /*
-   * Phase 1 of the workflow bot. It reads the lead, asks the model whether this is
-   * an incident her team works, and shows a traffic light. It does nothing else -
-   * nothing is clicked, sent, hidden, filtered, reordered, or dispositioned, and
-   * the lead renders in full whatever the light says. She is still the one who
-   * decides; this only saves her the first read on the ones that are obviously not
-   * hers.
-   *
-   * Green is earned (lib/relevance.js re-verifies the model's quote against the
-   * real transcript); red is never inferred from a failure. Every error path here -
-   * no key, rate limit, timeout, bad shape, extension reloaded mid-navigation -
-   * lands on the same grey "read it yourself" state, which is exactly the behaviour
-   * she has today. A wrong red is the only expensive mistake this feature can make,
-   * so nothing is allowed to manufacture one.
-   *
-   * Orange ("another agent is working it") is a later phase and is not built here.
-   */
-  var STATUS_ERROR_TEXT = {
-    'no-api-key': 'Add your Gemini API key in the extension settings to check leads.',
-    'no-transcript': 'This lead has no transcript to read.',
-    'bad-response-shape': 'The model returned something unreadable.',
-    'timeout': 'The check timed out.',
-    'rate-limited': 'Hit the Gemini usage limit - try again shortly.',
-    'gemini-error': 'The check could not be completed.'
-  };
-
-  function readStateValue() {
-    var stateEl = S.stateName ? document.querySelector(S.stateName.sel) : null;
-    return stateEl ? String(stateEl.value || '').trim() : '';
-  }
-
-  /** The same text she reads, packaged for the model. Null if there is nothing to judge. */
-  function readStatusLead() {
-    var blob = findLeadBlob();
-    if (!blob) { return null; }
-
-    var parsed = LEAD.parseLead(blob.textContent);
-    if (!parsed.ok || !parsed.transcript) { return null; }
-
-    return {
-      feed: parsed.feed,
-      category: parsed.category,
-      keywords: parsed.keywords,
-      transcript: parsed.transcript,
-      county: countyBareValue(),
-      state: readStateValue()
-    };
-  }
-
-  function renderVerdict(pill, verdict, vote) {
-    var status = verdict && verdict.status;
-    var tone = 'grey';
-    var label = RC.UNCLEAR_LABEL || 'Unclear';
-
-    if (status === (RC.STATUS && RC.STATUS.RELEVANT)) {
-      tone = 'green';
-      label = verdict.categoryLabel || 'Ours';
-    } else if (status === (RC.STATUS && RC.STATUS.NOT_RELEVANT)) {
-      tone = 'red';
-      label = RC.NOT_RELEVANT_LABEL || 'Not ours';
-    }
-
-    pill.className = 'apa-lead-status apa-lead-status--' + tone;
-    pill.lastChild.textContent = label;
-
-    // The row has no space for the reasoning, so it lives in the tooltip - the quote
-    // included, because being able to check the cited line against the transcript
-    // right there is what makes the light worth trusting.
-    var title = (verdict && verdict.reason) || '';
-    if (verdict && verdict.quote) {
-      title = title ? title + '\n\n"' + verdict.quote + '"' : '"' + verdict.quote + '"';
-    }
-
-    // What her own past rulings say about leads like this one. Shown even when it
-    // agrees with the model, because the point is for her to see that the checker is
-    // drawing on her corrections rather than just asserting things at her.
-    if (vote && vote.count) {
-      var says = vote.label === RC.FEEDBACK_LABELS.OURS ? 'yours' : 'not yours';
-      title += (title ? '\n\n' : '') + vote.count + ' similar lead' +
-        (vote.count === 1 ? '' : 's') + ' you labelled: mostly ' + says +
-        ' (' + Math.round(vote.agreement * 100) + '% agreement).';
-    }
-
-    pill.title = title || label;
-  }
-
-  function renderStatusError(pill, reason) {
-    pill.className = 'apa-lead-status apa-lead-status--grey';
-    pill.lastChild.textContent = RC.UNCLEAR_LABEL || 'Unclear';
-    pill.title = STATUS_ERROR_TEXT[reason] || 'The check could not be completed.';
-  }
-
-  function buildStatusPill() {
-    var pill = el('span', 'apa-lead-status apa-lead-status--grey');
-    pill.appendChild(el('span', 'apa-lead-status-dot'));
-    pill.appendChild(document.createTextNode(RC.PENDING_LABEL || 'Checking…'));
-    return pill;
-  }
-
-  function readVerdictCache() {
-    return new Promise(function (resolve) {
-      try {
-        chrome.storage.local.get([VERDICTS_KEY], function (got) {
-          if (chrome.runtime.lastError) { resolve({}); return; }
-          resolve((got || {})[VERDICTS_KEY] || {});
-        });
-      } catch (err) {
-        resolve({});
-      }
-    });
-  }
-
-  /*
-   * A lead's text never changes once it exists, so a cached verdict is always still
-   * correct for that lead - the TTL and the cap are only here to stop the map growing
-   * without bound. Reopening a lead she has already looked at costs no quota.
-   */
-  function writeVerdictCache(leadId, verdict) {
-    readVerdictCache().then(function (cache) {
-      cache[leadId] = Object.assign({}, verdict, {
-        at: Date.now(),
-        v: RC.VERDICT_CACHE_VERSION || 0
-      });
-
-      var ids = Object.keys(cache);
-      var max = RC.VERDICT_CACHE_MAX || 50;
-      if (ids.length > max) {
-        ids.sort(function (a, b) { return (cache[b].at || 0) - (cache[a].at || 0); });
-        var pruned = {};
-        for (var i = 0; i < max; i++) { pruned[ids[i]] = cache[ids[i]]; }
-        cache = pruned;
-      }
-
-      var patch = {};
-      patch[VERDICTS_KEY] = cache;
-      try {
-        chrome.storage.local.set(patch, function () { void chrome.runtime.lastError; });
-      } catch (err) { warn('lead status cache', err); }
-    });
-  }
-
-  /** Always resolves to a vector or null; never rejects. */
-  function requestEmbedding(transcript) {
-    return new Promise(function (resolve) {
-      try {
-        chrome.runtime.sendMessage({ type: 'apa.embedLead', transcript: transcript }, function (reply) {
-          if (chrome.runtime.lastError || !reply || !reply.ok) { resolve(null); return; }
-          resolve(reply.vector || null);
-        });
-      } catch (err) {
-        resolve(null);
-      }
-    });
-  }
-
-  /** Always resolves - an orphaned content script must not leave the pill hanging. */
-  function requestClassification(lead) {
-    return new Promise(function (resolve) {
-      try {
-        chrome.runtime.sendMessage({ type: 'apa.classifyLead', lead: lead }, function (reply) {
-          if (chrome.runtime.lastError) { resolve({ ok: false, reason: 'gemini-error' }); return; }
-          resolve(reply || { ok: false, reason: 'gemini-error' });
-        });
-      } catch (err) {
-        resolve({ ok: false, reason: 'gemini-error' });
-      }
-    });
-  }
-
-  /*
-   * Her corrections. Two buttons, one click, and the label she sets is treated as
-   * ground truth from then on: it overrides the light on this lead permanently, and
-   * it goes into the prompt for every later lead as a worked example (see
-   * lib/relevance.js selectFeedbackExamples). This is the only mechanism by which
-   * the feature gets better at her particular job - the category definitions are a
-   * guess at her judgement, these are her judgement.
-   *
-   * Storage is a plain array, newest last, deduped by lead id so relabelling the
-   * same lead replaces rather than double-counts.
-   */
-  function readFeedback() {
-    return new Promise(function (resolve) {
-      try {
-        chrome.storage.local.get([FEEDBACK_KEY], function (got) {
-          if (chrome.runtime.lastError) { resolve([]); return; }
-          var list = (got || {})[FEEDBACK_KEY];
-          resolve(Array.isArray(list) ? list : []);
-        });
-      } catch (err) {
-        resolve([]);
-      }
-    });
-  }
-
-  function writeFeedback(entry) {
-    return readFeedback().then(function (list) {
-      var kept = list.filter(function (item) {
-        return !item || item.leadId !== entry.leadId;
-      });
-      kept.push(entry);
-
-      var max = RC.FEEDBACK_MAX || 60;
-      if (kept.length > max) { kept = kept.slice(kept.length - max); }
-
-      var patch = {};
-      patch[FEEDBACK_KEY] = kept;
-      return new Promise(function (resolve) {
-        try {
-          chrome.storage.local.set(patch, function () {
-            void chrome.runtime.lastError;
-            resolve(kept.length);
-          });
-        } catch (err) {
-          warn('lead feedback', err);
-          resolve(kept.length);
-        }
-      });
-    });
-  }
-
-  function markFeedbackButtons(buttons, label) {
-    buttons.ours.classList.toggle('apa-lead-vote--on', label === RC.FEEDBACK_LABELS.OURS);
-    buttons.notOurs.classList.toggle('apa-lead-vote--on', label === RC.FEEDBACK_LABELS.NOT_OURS);
-  }
-
-  /** Her label wins over whatever the model said, on this lead, from now on. */
-  function verdictFromFeedback(label, previous) {
-    if (label === RC.FEEDBACK_LABELS.OURS) {
-      return {
-        status: RC.STATUS.RELEVANT,
-        categoryId: (previous && previous.categoryId) || null,
-        categoryLabel: (previous && previous.categoryLabel) || RC.RELEVANT_LABEL,
-        reason: 'You marked this one as yours.',
-        quote: null,
-        bySelf: true
-      };
-    }
-    return {
-      status: RC.STATUS.NOT_RELEVANT,
-      categoryId: null,
-      categoryLabel: '',
-      reason: 'You marked this one as not yours.',
-      quote: null,
-      bySelf: true
-    };
-  }
-
-  function buildFeedbackButtons(state, pill, leadId, lead) {
-    var wrap = el('span', 'apa-lead-vote');
-    var ours = button('apa-lead-vote-btn apa-lead-vote-ours', RC.RELEVANT_LABEL || 'Ours');
-    var notOurs = button('apa-lead-vote-btn apa-lead-vote-not', RC.NOT_RELEVANT_LABEL || 'Not ours');
-    ours.title = 'Mark this lead as one of yours - teaches the checker for future leads';
-    notOurs.title = 'Mark this lead as not yours - teaches the checker for future leads';
-
-    var buttons = { ours: ours, notOurs: notOurs };
-
-    function vote(label) {
-      return function () {
-        var verdict = verdictFromFeedback(label, state.verdict);
-        state.verdict = verdict;
-        renderVerdict(pill, verdict);
-        markFeedbackButtons(buttons, label);
-
-        if (!leadId) { return; }
-        writeVerdictCache(leadId, verdict);
-
-        // The vector was already computed when this lead was classified, so storing
-        // it costs nothing. Only a lead answered from cache has none, and that is
-        // the one case worth a round trip: a correction with no vector is invisible
-        // to every future similarity search, which is most of its value.
-        var save = function (vector) {
-          writeFeedback({
-            leadId: leadId,
-            transcript: lead.transcript,
-            label: label,
-            category: verdict.categoryId,
-            vector: vector || null,
-            // Which embedding space that vector belongs to. Without it, a later model
-            // change would leave these silently comparable-looking and meaningless.
-            ev: vector ? RC.EMBED_VERSION : null,
-            at: Date.now()
-          });
-        };
-
-        if (state.vector) { save(state.vector); return; }
-        requestEmbedding(lead.transcript).then(save);
-      };
-    }
-
-    ours.addEventListener('click', vote(RC.FEEDBACK_LABELS.OURS));
-    notOurs.addEventListener('click', vote(RC.FEEDBACK_LABELS.NOT_OURS));
-
-    wrap.appendChild(ours);
-    wrap.appendChild(notOurs);
-    return { node: wrap, buttons: buttons };
-  }
-
-  function enhanceLeadStatus(settings) {
-    if (settings.relevanceEnabled !== true) { return; }
-
-    var row = S.leadDetailsHead ? document.querySelector(S.leadDetailsHead.sel) : null;
-    if (!row || row.dataset.apaStatusRow === '1') { return; }
-
-    var lead = readStatusLead();
-    if (!lead) { return; }
-
-    var anchor = document.querySelector(S.leadIdAnchor.sel);
-    var leadId = anchor ? String(anchor.textContent || '').trim() : '';
-
-    // Marker, pill and vote buttons all go in together, before anything async, so
-    // the row settles into its final layout once instead of jumping when the verdict
-    // lands.
-    row.dataset.apaStatusRow = '1';
-    var state = { verdict: null, vector: null };
-    var pill = buildStatusPill();
-    var vote = buildFeedbackButtons(state, pill, leadId, lead);
-    var group = el('span', 'apa-lead-status-group');
-    group.appendChild(pill);
-    group.appendChild(vote.node);
-    row.appendChild(group);
-
-    readVerdictCache().then(function (cache) {
-      var hit = leadId ? cache[leadId] : null;
-      var ttl = RC.VERDICT_TTL_MS || 0;
-      var version = RC.VERDICT_CACHE_VERSION || 0;
-      // A verdict she set herself is never re-asked and never expires with a prompt
-      // change - it is not the model's answer to revise. Everything else is stale
-      // once the prompt wording moves, so a version bump re-asks rather than showing
-      // yesterday's answer under today's rules.
-      if (hit && hit.bySelf) {
-        state.verdict = hit;
-        renderVerdict(pill, hit);
-        markFeedbackButtons(vote.buttons,
-          hit.status === RC.STATUS.RELEVANT ? RC.FEEDBACK_LABELS.OURS : RC.FEEDBACK_LABELS.NOT_OURS);
-        return;
-      }
-      if (hit && hit.at && hit.v === version && (Date.now() - hit.at) < ttl) {
-        state.verdict = hit;
-        renderVerdict(pill, hit);
-        return;
-      }
-
-      requestClassification(lead).then(function (reply) {
-        if (!reply.ok) {
-          renderStatusError(pill, reply.reason);
-          return;
-        }
-        state.verdict = reply.verdict;
-        state.vector = reply.vector || null;
-        renderVerdict(pill, reply.verdict, reply.vote);
-        if (leadId) { writeVerdictCache(leadId, reply.verdict); }
-      });
-    });
   }
 
   // -------------------------------------------------- city -> jurisdiction mirror
@@ -1206,9 +832,6 @@
     // After enhanceHeader: it is what creates .apa-head-right and tags .apa-lead-time.
     try { enhanceDataFeedLink(dfSettings); } catch (err) { warn('data feed link', err); }
     try { enhanceMonitorButton(settings); } catch (err) { warn('monitor button', err); }
-    // After enhanceMonitorButton: the pill is appended to the same row, so the
-    // Monitor button has to already be in it for the layout to settle once.
-    try { enhanceLeadStatus(settings); } catch (err) { warn('lead status', err); }
     try { enhanceLeadDetail(settings, rules); } catch (err) { warn('lead detail', err); }
     try { enhanceAudio(); } catch (err) { warn('audio player', err); }
     try { mirrorCityToJurisdiction(); } catch (err) { warn('jurisdiction mirror', err); }

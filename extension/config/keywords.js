@@ -44,10 +44,7 @@
     legendEnabled: false,   // one category needs no legend; turn on if you add more
     footerReshuffleEnabled: true,
     monitorAutoSendEnabled: false,
-    darkMode: false,
-    // Off by default: every lead opened with this on spends one call against her own
-    // Gemini quota, so it is hers to switch on deliberately. Read as `=== true`.
-    relevanceEnabled: false
+    darkMode: false
   };
 
   var api = {

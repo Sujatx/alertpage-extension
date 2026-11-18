@@ -559,12 +559,13 @@
       var input = document.querySelector(S.chatInput.sel);
       if (!input) { return; }
       input.value = '/m ' + countyBareValue();
+      APA.collector && APA.collector.ext('monitor_fill', 'chat_text_box', input.value);
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.focus();
 
       if (settings.monitorAutoSendEnabled === true) {
         var sendBtn = document.querySelector(S.chatSendButton.sel);
-        if (sendBtn) { sendBtn.click(); }
+        if (sendBtn) { sendBtn.click(); APA.collector && APA.collector.autosend(countyBareValue()); }
 
         // Stays "Monitoring" for the rest of this lead - a fresh page load for the
         // next lead builds a brand new button, back to "Monitor".
@@ -610,6 +611,7 @@
       if (!value) { return; }                          // never blank Jurisdiction
       if (jurisdiction.value === value) { return; }    // already correct
       jurisdiction.value = value;
+      APA.collector && APA.collector.ext('jurisdiction_mirror', 'jurisdiction', value);
     }
 
     sync();
@@ -658,6 +660,7 @@
         }
         btn.addEventListener('click', function () {
           textarea.value = pill.text;
+          APA.collector && APA.collector.ext('notes_pill', 'internal_notes', pill.text);
           textarea.dispatchEvent(new Event('change', { bubbles: true }));
         });
         row.appendChild(btn);

@@ -53,6 +53,16 @@
     </div>
   </section>
 
+  <section class="group" aria-labelledby="g-collector">
+    <h2 id="g-collector">Collector</h2>
+    <label class="row">
+      <span>Record usage data</span>
+      <span class="switch"><input type="checkbox" id="collectorEnabled"><span class="slider"></span></span>
+    </label>
+    <p class="hint" id="collectorStatus"></p>
+    <p class="hint" id="collectorHint" hidden>Set your userID note pill to your company ID to start uploading.</p>
+  </section>
+
   <details class="group fold">
     <summary><span class="grow">Keywords</span><span class="count" id="keywordCount"></span></summary>
     <div class="chips" id="keywords">
@@ -78,6 +88,8 @@
   <script src="../config/data-feed-settings.js"></script>
   <script src="../lib/highlight.js"></script>
   <script src="../lib/notes.js"></script>
+  <script src="../config/collector-settings.js"></script>
+  <script src="../lib/collect-envelope.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

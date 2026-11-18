@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "AlertPage Working Screen Assist",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Readability, Accessibility and Data Feed sync for AlertPage.",
-  "permissions": ["storage"],
+  "permissions": ["storage", "alarms"],
   "host_permissions": [
     "https://dispatch.alertpage.net/*",
-    "https://ap-portal.alertpage.net/*"
+    "https://ap-portal.alertpage.net/*",
+    "https://apc-ingest.sujat.workers.dev/*"
   ],
   "background": { "service_worker": "background.js" },
   "icons": {
@@ -39,7 +40,14 @@
         "lib/highlight.js",
         "lib/notes.js",
         "lib/lead-feed.js",
-        "content/working-screen.js"
+        "config/collector-settings.js",
+        "lib/collect-canon.js",
+        "lib/collect-envelope.js",
+        "lib/collect-redact.js",
+        "lib/collect-chat.js",
+        "collector/hooks.js",
+        "content/working-screen.js",
+        "collector/observe-working-screen.js"
       ],
       "css": ["content/working-screen.css"]
     },

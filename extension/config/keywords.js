@@ -44,7 +44,8 @@
     legendEnabled: false,   // one category needs no legend; turn on if you add more
     footerReshuffleEnabled: true,
     monitorAutoSendEnabled: false,
-    darkMode: false
+    darkMode: false,
+    collectorEnabled: true   // passive data collector; read as !== false
   };
 
   var api = {

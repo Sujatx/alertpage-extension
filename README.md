@@ -13,11 +13,10 @@ links each lead straight through to the matching Data Feed search.
 - **Keyword highlighting** in the transcript
 - **Inline audio player** for the transmission link
 - **Jurisdiction auto-fill** from City, closing a gap in AlertPage's own address autocomplete
-- **Reworked footer buttons** making it intuitive 
+- **Reworked footer buttons** making it intuitive
 - **Monitor button** that fills (or, opt-in, sends) the chat with `/m <county>` in one click
 - **Data Feed link** that opens the Data Feed pre-filtered to a lead's system, county, and time window, reusing one tab across leads
-- **Summarize (beta)** — drafts a one-line, hyperlinked incident summary from the transmissions around the alert, using your own Gemini API key
-- **Lead status (beta)** — an opt-in traffic light on each lead: green if the incident is one your team works, red if it isn't, grey if it couldn't tell — and it learns from your corrections
+- **Collector** — passively records what you see and do on the Working Screen and uploads it, so the team's workflow can be measured. It never clicks or submits anything for you.
 
 ## Install
 
@@ -30,54 +29,50 @@ Then open a lead at `https://dispatch.alertpage.net/web/working-queue/<lead id>/
 The Data Feed link needs you signed in to `ap-portal.alertpage.net` in the same browser.
 If you aren't, the link still works — it just opens the Data Feed unfiltered.
 
+**One-time setup:** open the toolbar popup → Note pills → set the `AP***` pill to your
+company ID (for example `ap422`). The collector uses it to tell dispatchers apart and
+won't upload until it's set.
+
+## Update
+
+Download the latest zip from GitHub, extract it over the **same** folder, then click the
+reload icon on the extension in `chrome://extensions`. Your settings are kept.
+
 ## Usage
 
 Open a lead and the layout, highlighting, audio player, and jurisdiction auto-fill are
 already applied — nothing to turn on.
 
 - **Monitor** fills the chat with `/m <county>` for you to review and send. Turn on
-  "Monitor autosend" in the toolbar popup to have it send instantly instead.
+  "Monitor sends instantly" in the toolbar popup to have it send instantly instead.
 - **Data Feed ↗** opens the Data Feed pre-filtered to that lead's system, county, and
   time window, reusing one tab across leads instead of piling up new ones.
-- **Summarize**, in the Data Feed's banner, drafts a one-line incident summary from the
-  transmissions around the alert. Click any segment of the result to jump straight to
-  the transmission it came from.
-- The toolbar icon is the only settings surface: display toggles, Data Feed sync
-  toggles, the keyword list, quick-fill pills (set your Agent ID pill once), and your
-  Gemini API key for Summarize — everything saves as you type.
+- The toolbar icon is the only settings surface: display toggles, Data Feed link
+  options, the collector switch and its counts, the keyword list, and quick-fill note
+  pills — everything saves as you type.
 
-- **Lead status**, off by default, reads each lead as it opens and marks it green
-  (one of your incident types), red (not one of them), or grey (not enough to go on).
-  Hover the pill for the reasoning and the line it was based on. It is advisory only —
-  nothing is hidden, filtered, or actioned, and the full lead reads exactly as it
-  always has. When it gets one wrong, the **Ours / Not ours** buttons beside it
-  record your call; those corrections are carried into every later check as worked
-  examples. Matching is semantic, not keyword-based: each transcript is embedded as a
-  vector, and a new lead is checked against the past rulings most *like* it, which
-  also act as a second opinion on the answer. So it keeps improving as you label
-  rather than levelling off. The toolbar popup shows how many corrections it has
-  learned from and can clear them.
+## Collector
 
-Summarize and Lead status share one free-tier Gemini API key, pasted into the
-"Summarize AI(beta)" card. It's stored only in your own browser.
+On by default; switch it off under **Collector** in the popup. It records leads viewed,
+dispositions you submit, field changes on allow-listed fields, team chat in room 1,
+and what the extension itself wrote. It never reads passwords, cookies, CSRF tokens,
+the chat input box, or keystrokes. Events queue in the browser (offline is fine) and
+upload in small batches; nothing is deleted locally until the server confirms it.
+The popup shows how many are queued, sent, and quarantined.
+
+The backend is a Cloudflare Worker + D1 database in [`server/`](server/README.md),
+with a daily job that reconciles outcomes and deletes raw data after 90 days.
 
 ## Network
 
-Four requests, all read-only:
-
 - `GET /get_systems` on `ap-portal.alertpage.net`, to turn a lead's feed name into the
   Data Feed's system id. Cached for 12 hours.
-- `GET /get_transmissions` on the same host, only when you click Summarize — fetches
-  the transcripts it needs to work from.
-- Two calls to `generativelanguage.googleapis.com` (Google's Gemini API), using the
-  API key you supplied: `generateContent` when you click Summarize, and — if you've
-  switched Lead status on — `generateContent` plus one small `embedContent` per lead
-  you open. This is the one third-party call this
-  extension ever makes, and it's opt-in: leave the key blank and it never happens.
-  Verdicts are cached per lead, so reopening one costs nothing.
+- `POST /v1/events:batch` on `apc-ingest.sujat.workers.dev` — the collector's uploads
+  to our own Worker. No other third-party calls, and no AI.
 
 ## Tests
 
 ```bash
 node tests/run-tests.js
+node server/test/ingest.test.mjs   # Worker + D1, runs locally with wrangler
 ```

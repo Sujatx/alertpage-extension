@@ -6,7 +6,7 @@
  *   apa.pills             - entirely
  *   apa.rules             - the terms of the first category only
  *   apa.settings          - highlightEnabled, footerReshuffleEnabled,
- *                           monitorAutoSendEnabled, darkMode only
+ *                           monitorAutoSendEnabled, collectorEnabled, darkMode only
  *   apa.dataFeedSettings  - every field except syncEnabled
  *
  * The keyword editor is deliberately one flat list. apa.rules supports several
@@ -44,6 +44,9 @@
     highlightEnabled: $('highlightEnabled'),
     footerReshuffleEnabled: $('footerReshuffleEnabled'),
     monitorAutoSendEnabled: $('monitorAutoSendEnabled'),
+    collectorEnabled: $('collectorEnabled'),
+    collectorStatus: $('collectorStatus'),
+    collectorHint: $('collectorHint'),
     syncSource: $('syncSource'),
     syncCounty: $('syncCounty'),
     syncTalkgroup: $('syncTalkgroup'),
@@ -106,6 +109,7 @@
         highlightEnabled: els.highlightEnabled.checked,
         footerReshuffleEnabled: els.footerReshuffleEnabled.checked,
         monitorAutoSendEnabled: els.monitorAutoSendEnabled.checked,
+        collectorEnabled: els.collectorEnabled.checked,
         darkMode: state.settings.darkMode === true
       });
       patch[DATA_FEED_KEY] = Object.assign({}, DF.DEFAULT_DATA_FEED_SETTINGS, stored[DATA_FEED_KEY] || {}, {
@@ -128,6 +132,7 @@
   function schedule() {
     if (schedule.timer) { clearTimeout(schedule.timer); }
     schedule.timer = setTimeout(write, SAVE_DEBOUNCE_MS);
+    renderCollectorHint();
   }
 
   // ---------------------------------------------------------------- rendering
@@ -244,6 +249,7 @@
     els.footerReshuffleEnabled.checked = state.settings.footerReshuffleEnabled !== false;
     // Defaults off, so read as `=== true` - see config/keywords.js.
     els.monitorAutoSendEnabled.checked = state.settings.monitorAutoSendEnabled === true;
+    els.collectorEnabled.checked = state.settings.collectorEnabled !== false;
     renderThemeToggle();
 
     // syncTalkgroup and syncTimeRange default off - see config/data-feed-settings.js.
@@ -255,6 +261,20 @@
     renderMinutesState();
   }
 
+  // apc.status is written by the service worker; this panel only reads it.
+  function renderCollectorStatus(status) {
+    status = status || {};
+    els.collectorStatus.textContent = (status.queued || 0) + ' queued · ' + (status.sent || 0) +
+      ' sent · ' + (status.quarantined || 0) + ' quarantined';
+    renderCollectorHint();
+  }
+
+  // Read from the pill as typed, not from the service worker, so the hint clears at once.
+  function renderCollectorHint() {
+    var ENV = globalThis.APA.envelope;
+    els.collectorHint.hidden = !ENV.dispatcherIdProblem(ENV.pillDispatcherText(state.pills));
+  }
+
   function renderAll() {
     renderSettings();
     renderKeywords();
@@ -264,17 +284,22 @@
   // ------------------------------------------------------------------- wiring
 
   function load() {
-    chrome.storage.local.get([SETTINGS_KEY, RULES_KEY, PILLS_KEY, DATA_FEED_KEY], function (got) {
+    chrome.storage.local.get([SETTINGS_KEY, RULES_KEY, PILLS_KEY, DATA_FEED_KEY, 'apc.status'], function (got) {
       var stored = got || {};
       state.settings = Object.assign({}, K.DEFAULT_SETTINGS, stored[SETTINGS_KEY] || {});
       state.dataFeed = Object.assign({}, DF.DEFAULT_DATA_FEED_SETTINGS, stored[DATA_FEED_KEY] || {});
       state.rules = HL.normalizeRules(stored[RULES_KEY], K.DEFAULT_RULES);
       state.pills = NOTES.normalizePills(stored[PILLS_KEY], PC.DEFAULT_PILLS);
       renderAll();
+      renderCollectorStatus(stored['apc.status']);
     });
   }
 
-  ['highlightEnabled', 'footerReshuffleEnabled', 'monitorAutoSendEnabled',
+  chrome.storage.onChanged.addListener(function (changes, area) {
+    if (area === 'local' && changes['apc.status']) { renderCollectorStatus(changes['apc.status'].newValue); }
+  });
+
+  ['highlightEnabled', 'footerReshuffleEnabled', 'monitorAutoSendEnabled', 'collectorEnabled',
     'syncSource', 'syncCounty', 'syncTalkgroup', 'syncTimeRange'].forEach(function (id) {
     els[id].addEventListener('change', schedule);
   });

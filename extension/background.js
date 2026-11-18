@@ -19,6 +19,7 @@
 'use strict';
 
 importScripts('config/data-feed-settings.js');
+importScripts('collector/store.js');   // passive data collector queue + uploader
 
 var DF = globalThis.APA.dataFeed;
 

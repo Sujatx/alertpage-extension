@@ -21,6 +21,12 @@ var NOTES = require(path.join(ROOT, 'extension/lib/notes.js'));
 var PC = require(path.join(ROOT, 'extension/config/pills.js'));
 var FEED = require(path.join(ROOT, 'extension/lib/lead-feed.js'));
 var DFC = require(path.join(ROOT, 'extension/config/data-feed-settings.js'));
+var CC = require(path.join(ROOT, 'extension/config/collector-settings.js'));
+var CANON = require(path.join(ROOT, 'extension/lib/collect-canon.js'));
+var ENV = require(path.join(ROOT, 'extension/lib/collect-envelope.js'));
+var RED = require(path.join(ROOT, 'extension/lib/collect-redact.js'));
+var CHAT = require(path.join(ROOT, 'extension/lib/collect-chat.js'));
+var Q = require(path.join(ROOT, 'extension/lib/collect-queue.js'));
 
 var passed = 0;
 var failed = [];
@@ -35,6 +41,16 @@ function it(name, fn) {
   } catch (err) {
     failed.push({ name: group + ' > ' + name, message: err.message });
   }
+}
+
+var pending = [];
+
+// For tests that return a promise; the report waits for all of them.
+function itAsync(name, fn) {
+  var label = group + ' > ' + name;
+  pending.push(Promise.resolve().then(fn).then(function () { passed++; }, function (err) {
+    failed.push({ name: label, message: err.message });
+  }));
 }
 
 function eq(actual, expected, label) {
@@ -578,12 +594,277 @@ describe('default settings', function () {
   });
 });
 
+// ---------------------------------------------------------------- collector contract
+
+describe('collector dispatcher id', function () {
+  it('trims and lowercases the userID pill', function () {
+    eq(ENV.normaliseDispatcherId('  AP422 '), 'ap422');
+  });
+  it('treats the AP*** placeholder and empty text as missing', function () {
+    eq(ENV.normaliseDispatcherId('AP***'), null);
+    eq(ENV.normaliseDispatcherId('   '), null);
+    eq(ENV.dispatcherIdProblem('AP***'), 'missing');
+    eq(ENV.dispatcherIdProblem(undefined), 'missing');
+  });
+  it('rejects malformed ids by format only', function () {
+    eq(ENV.normaliseDispatcherId('ap 422'), null);
+    eq(ENV.dispatcherIdProblem('-ap422'), 'invalid');
+    eq(ENV.dispatcherIdProblem('a'.repeat(33)), 'invalid');
+    eq(ENV.dispatcherIdProblem('ap_4-2'), null);
+  });
+  it('finds the userID pill by id, not by text', function () {
+    eq(ENV.pillDispatcherText([{ id: 'dup', text: 'dup' }, { id: 'userID', text: 'ap9' }]), 'ap9');
+    eq(ENV.pillDispatcherText(null), null);
+  });
+});
+
+describe('collector envelope', function () {
+  var ctx = { source: 'working_screen', occurredAt: 1700000000000, tzOffsetMin: 240, tzName: 'America/New_York',
+    extensionVersion: '1.2.3', pageLoadId: 'p1', seq: 0, leadId: 42, uuid: function () { return 'u1'; } };
+  it('fills category and versions from the contract', function () {
+    var e = ENV.buildEvent('lead_viewed', { a: 1 }, ctx);
+    eq([e.event_id, e.category, e.schema_version, e.collector_version, e.lead_id, e.seq],
+      ['u1', 'page_observation', 1, CC.COLLECTOR_VERSION, 42, 0]);
+    ok(!('dispatcher_id' in e), 'no dispatcher_id before batch build');
+  });
+  it('throws on an unknown event type or source', function () {
+    var threw = 0;
+    try { ENV.buildEvent('ext_vote_recorded', {}, ctx); } catch (e) { threw++; }
+    try { ENV.buildEvent('lead_viewed', {}, Object.assign({}, ctx, { source: 'x' })); } catch (e) { threw++; }
+    eq(threw, 2);
+  });
+  it('stamps session, tab and dispatcher at batch build without mutating the queued record', function () {
+    var e = ENV.buildEvent('audio_played', {}, ctx);
+    var s = ENV.stampForBatch(e, 's1', 7, 'ap422');
+    eq([s.session_id, s.tab_id, s.dispatcher_id], ['s1', 7, 'ap422']);
+    ok(!('dispatcher_id' in e), 'original untouched');
+  });
+  it('keeps the contract caps from Spike B', function () {
+    eq([CC.MAX_BATCH_EVENTS, CC.MAX_BATCH_BYTES, CC.TRIGGER_BYTES], [50, 131072, 65536]);
+    ok(CC.ORIGIN_RE.test('chrome-extension://abcdefghijklmnopabcdefghijklmnop'), 'any extension id');
+    ok(!CC.ORIGIN_RE.test('https://evil.example'), 'web origin refused');
+  });
+});
+
+describe('collector canonical json', function () {
+  it('sorts keys at every depth and drops undefined', function () {
+    eq(CANON.canonical({ b: 1, a: { d: [2, { z: 1, y: 2 }], c: undefined } }), '{"a":{"d":[2,{"y":2,"z":1}]},"b":1}');
+  });
+  it('is stable for integer-like keys that JSON.parse reorders', function () {
+    eq(CANON.canonical(JSON.parse('{"b":1,"10":2,"2":3}')), CANON.canonical({ '2': 3, '10': 2, b: 1 }));
+  });
+  itAsync('hashes with SHA-256 hex', function () {
+    return CANON.sha256Hex('abc').then(function (h) {
+      eq(h, 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+    });
+  });
+});
+
+describe('collector redaction', function () {
+  it('keeps only allow-listed form fields', function () {
+    eq(Object.keys(RED.pickAllowed({ internal_notes: 'dup', csrfmiddlewaretoken: 'x', chat: 'y', lead_id: '1' })).sort(), ['internal_notes', 'lead_id']);
+  });
+  it('scrubs forbidden keys at every depth', function () {
+    var out = RED.scrub({ a: { csrf_token: 1, ok: 2, deep: [{ Cookie: 1, v: 3 }] }, api_key: 'k', password: 'p' });
+    eq(out, { a: { ok: 2, deep: [{ v: 3 }] } });
+  });
+  it('strips url query and fragment', function () {
+    eq(RED.stripQuery('https://m.example/a/b.m4a?sig=abc#t=1'), 'https://m.example/a/b.m4a');
+  });
+  it('truncates by UTF-8 bytes without splitting a surrogate pair', function () {
+    eq(RED.truncate('a😀b', 2), 'a');
+    ok(CANON.byteLength(RED.truncate('x'.repeat(100), 10)) <= 10, 'ascii cut');
+  });
+  it('fits a payload under the 32 KB cap by shortening the longest string', function () {
+    var out = RED.fitPayload({ snapshot: { blob_text: 'z'.repeat(60000) }, header_text: 'keep me', token: 'no' });
+    ok(CANON.byteLength(JSON.stringify(out)) <= CC.MAX_PAYLOAD_BYTES, 'under cap');
+    eq(out.header_text, 'keep me');
+    ok(!('token' in out), 'token scrubbed');
+  });
+  it('classifies provenance per schema section 7', function () {
+    eq(RED.provenance({}, 'a', 'a'), 'page_initial');
+    eq(RED.provenance({ trusted: { at: 5 } }, 'b', 'a'), 'dispatcher');
+    eq(RED.provenance({ ext: { value: 'x', at: 1 } }, 'x', 'a'), 'extension');
+    eq(RED.provenance({ ext: { value: 'x', at: 1 }, trusted: { at: 2 } }, 'y', 'a'), 'extension_then_dispatcher');
+    eq(RED.provenance({ ext: { value: 'x', at: 1 }, trusted: { at: 0 } }, 'x', 'a'), 'extension');
+    eq(RED.provenance({}, 'b', 'a'), 'page_script');
+    eq(RED.provenance({}, 'b', undefined), 'unknown');
+  });
+});
+
+describe('collector chat key', function () {
+  // 21:25 in UTC-4 (offset 240) is 01:25 UTC the next day.
+  var obs = Date.UTC(2026, 7, 27, 1, 25, 30);
+  it('parses displayed times', function () {
+    eq([CHAT.parseDisplayedTime('12:05 AM'), CHAT.parseDisplayedTime('12:05 PM'), CHAT.parseDisplayedTime('9:24 PM'), CHAT.parseDisplayedTime('nope')], [5, 725, 1284, null]);
+  });
+  it('picks the latest minute at or before observation with that local h:mm', function () {
+    eq(CHAT.minuteUtc('9:24 PM', obs, 240), Date.UTC(2026, 7, 27, 1, 24));
+    eq(CHAT.minuteUtc('9:25 PM', obs, 240), Date.UTC(2026, 7, 27, 1, 25));
+  });
+  it('rolls back a day for a time later than now on the clock', function () {
+    eq(CHAT.minuteUtc('9:26 PM', obs, 240), Date.UTC(2026, 7, 26, 1, 26));
+  });
+  it('handles UTC+ zones', function () {
+    eq(CHAT.minuteUtc('2:25 AM', Date.UTC(2026, 0, 1, 1, 25, 10), -60), Date.UTC(2026, 0, 1, 1, 25));
+  });
+  itAsync('counts occurrence of identical messages and hashes the raw text', function () {
+    var counter = CHAT.createCounter();
+    var ctx = { observedAt: obs, tzOffsetMin: 240, uuid: function () { return 'u'; } };
+    var m = { author: 'AP411', displayedTime: '9:24 PM', text: ' brb ' };
+    return Promise.all([CHAT.buildItem(m, ctx, counter), CHAT.buildItem(m, ctx, counter),
+      CHAT.buildItem({ author: 'AP411', displayedTime: '9:24 PM', text: 'other' }, ctx, counter)]).then(function (r) {
+      eq([r[0].occurrence, r[1].occurrence, r[2].occurrence], [1, 2, 1]);
+      eq(r[0].item_type, 'chat_message_observed');
+      eq(r[0].room_id, 1);
+      return CANON.sha256Hex(' brb ').then(function (h) { eq(r[0].text_sha256, h); });
+    });
+  });
+});
+
+describe('collector queue', function () {
+  function mk(n, over) {
+    var out = [];
+    for (var i = 0; i < n; i++) {
+      var r = Q.makeRecord({ event_id: 'e' + (1000 + i), event_type: 'audio_played', payload: {} }, 1000 + i);
+      out.push(Object.assign(r, over || {}));
+    }
+    return out;
+  }
+  it('picks at most 50 events, oldest first', function () {
+    var b = Q.pickBatch(mk(120));
+    eq(b.length, 50);
+    eq(b[0].event_id, 'e1000');
+  });
+  it('keeps the body under 128 KB', function () {
+    var big = mk(10).map(function (r) { return Object.assign(r, { bytes: 30000 }); });
+    var b = Q.pickBatch(big);
+    ok(b.length >= 1 && b.length <= 4, 'fits: ' + b.length);
+    ok(b.reduce(function (n, r) { return n + r.bytes + 161; }, 200) <= CC.MAX_BATCH_BYTES, 'under cap');
+  });
+  it('always returns one record even if it alone exceeds the cap', function () {
+    eq(Q.pickBatch([Object.assign(mk(1)[0], { bytes: 500000 })]).length, 1);
+  });
+  it('returns a retry set whole under its batch_id', function () {
+    var recs = mk(5).map(function (r, i) { return Object.assign(r, { batch_id: i < 3 ? 'B' : null }); });
+    eq(Q.pickBatch(recs).map(function (r) { return r.event_id; }), ['e1000', 'e1001', 'e1002']);
+  });
+  it('limit narrows a fresh batch (bisect)', function () { eq(Q.pickBatch(mk(10), { limit: 4 }).length, 4); });
+
+  it('upload triggers: 50 events, 64 KB or 60 s; never while inflight or backing off', function () {
+    var base = { pending: 1, pendingBytes: 100, oldestPendingAt: 0, inflight: 0, retryAt: 0, lastBatchAt: 0 };
+    ok(!Q.shouldUpload(base, 10000), 'young and small waits');
+    ok(Q.shouldUpload(base, 60000), '60 s');
+    ok(Q.shouldUpload(Object.assign({}, base, { pending: 50 }), 10), '50 events');
+    ok(Q.shouldUpload(Object.assign({}, base, { pendingBytes: 65536 }), 10), '64 KB');
+    ok(!Q.shouldUpload(Object.assign({}, base, { inflight: 1 }), 99999), 'inflight');
+    ok(!Q.shouldUpload(Object.assign({}, base, { retryAt: 5e6 }), 99999), 'backoff');
+    ok(!Q.shouldUpload(Object.assign({}, base, { lastBatchAt: 99000 }), 100000), 'drain gap');
+    ok(Q.shouldUpload(Object.assign({}, base, { retrying: true }), 5), 'retry when due');
+    ok(!Q.shouldUpload(Object.assign({}, base, { pending: 0 }), 99999), 'nothing pending');
+  });
+
+  it('ack: accepted and duplicate are acked, rejected is quarantined and kept, missing goes back (AC-4, AC-15)', function () {
+    var recs = mk(4, { status: 'inflight', batch_id: 'B' });
+    var r = Q.applyAck(recs, { results: [
+      { event_id: 'e1000', status: 'accepted' }, { event_id: 'e1001', status: 'duplicate' },
+      { event_id: 'e1002', status: 'rejected', code: 'invalid_field' }] }, 5000);
+    eq(r.records.length, 4, 'nothing dropped');
+    eq(r.records.map(function (x) { return x.status; }), ['acked', 'acked', 'quarantined', 'pending']);
+    eq(r.records[2].last_error, 'invalid_field');
+    eq(r.records[0].acked_at, 5000);
+    eq(r.quarantined, [{ event_id: 'e1002', code: 'invalid_field' }]);
+    eq(r.acked, 2);
+    ok(!Q.canPurge(r.records[2], 5000 + 1e12), 'quarantined is never purged');
+  });
+  it('purges acked records only after 7 days', function () {
+    var a = { status: 'acked', acked_at: 1000 };
+    ok(!Q.canPurge(a, 1000 + CC.ACKED_KEEP_MS - 1), 'not yet');
+    ok(Q.canPurge(a, 1000 + CC.ACKED_KEEP_MS), 'after 7 d');
+    ok(!Q.canPurge({ status: 'pending' }, 1e15), 'pending never');
+  });
+  it('a failed attempt never removes a record before ack (AC-4)', function () {
+    [0, 429, 500, 503, 400, 403, 409, 413].forEach(function (status) {
+      var out = Q.planFailure(mk(3, { status: 'inflight', batch_id: 'B' }), { status: status }, 1, 0.5);
+      eq(out.records.length, 3, 'status ' + status);
+      out.records.forEach(function (r) { ok(r.status === 'pending' || r.status === 'quarantined', 'kept'); });
+    });
+  });
+  it('backoff follows the schedule with jitter and honours Retry-After', function () {
+    eq(Q.nextBackoffMs(1, 0.5, 0), 30000);
+    eq(Q.nextBackoffMs(3, 0.5, 0), 120000);
+    eq(Q.nextBackoffMs(9, 0.5, 0), 900000);
+    eq(Q.nextBackoffMs(1, 0, 0), 24000);
+    ok(Q.nextBackoffMs(1, 0.9999, 0) <= 36000, 'upper jitter bound');
+    eq(Q.nextBackoffMs(1, 0.5, 77000), 77000);
+    eq(Q.nextBackoffMs(1, 0.5, 9e9), 24 * 3600 * 1000);
+  });
+  it('5xx and network keep the same batch_id and set, with backoff', function () {
+    var recs = mk(3, { status: 'inflight', batch_id: 'B' });
+    var p = Q.planFailure(recs, { status: 503, retryAfterMs: 90000 }, 1, 0.5);
+    eq(p.action, 'retry');
+    eq(p.delayMs, 90000);
+    eq(p.records.map(function (r) { return r.batch_id; }), ['B', 'B', 'B']);
+    eq(p.records[0].attempts, 1);
+  });
+  it('409 gets a new batch_id; 403 stops uploads but keeps the queue', function () {
+    var recs = mk(2, { status: 'inflight', batch_id: 'B' });
+    var n = Q.planFailure(recs, { status: 409 }, 1, 0.5);
+    eq([n.action, n.records[0].batch_id], ['newid', null]);
+    var s = Q.planFailure(recs, { status: 403 }, 1, 0.5);
+    eq(s.action, 'stop');
+    ok(s.delayMs >= 3600000, 'long pause');
+    eq(s.records[0].status, 'pending');
+  });
+  it('400 and 413 bisect a multi-event batch', function () {
+    var recs = mk(5, { status: 'inflight', batch_id: 'B' });
+    var p = Q.planFailure(recs, { status: 400 }, 1, 0.5);
+    eq([p.action, p.splitLimit, p.records[0].batch_id], ['split', 3, null]);
+    eq(Q.bisect(recs).map(function (h) { return h.length; }), [3, 2]);
+    eq(Q.planFailure(recs, { status: 413 }, 1, 0.5).action, 'split');
+  });
+  it('a single event: 413 quarantines at once, 400 only after POISON_ATTEMPTS', function () {
+    var one = mk(1, { status: 'inflight', batch_id: 'B' });
+    eq(Q.planFailure(one, { status: 413 }, 1, 0.5).records[0].status, 'quarantined');
+    var r = one;
+    for (var i = 1; i < CC.POISON_ATTEMPTS; i++) {
+      var p = Q.planFailure(r, { status: 400 }, 1, 0.5);
+      eq(p.records[0].status, 'pending');
+      r = [Object.assign({}, p.records[0], { status: 'inflight' })];
+    }
+    var last = Q.planFailure(r, { status: 400 }, 1, 0.5);
+    eq([last.records[0].status, last.records[0].last_error], ['quarantined', 'poison']);
+  });
+  it('repeated 5xx on a multi-event batch bisects after POISON_ATTEMPTS', function () {
+    var recs = mk(4, { status: 'inflight', batch_id: 'B', attempts: CC.POISON_ATTEMPTS - 1 });
+    var p = Q.planFailure(recs, { status: 500 }, 1, 0.5);
+    eq([p.action, p.splitLimit], ['split', 2]);
+  });
+  it('restarts: inflight returns to pending keeping its batch_id', function () {
+    var out = Q.recoverInflight(mk(2, { status: 'inflight', batch_id: 'B' }).concat(mk(1, { status: 'acked' })));
+    eq(out.map(function (r) { return r.status; }), ['pending', 'pending', 'acked']);
+    eq(out[0].batch_id, 'B');
+  });
+  it('cap policy: suppresses chat and extension_action at the cap, never a disposition', function () {
+    var under = { count: 1, bytes: 1 }, over = { count: CC.QUEUE_CAP_EVENTS, bytes: 1 }, overBytes = { count: 1, bytes: CC.QUEUE_CAP_BYTES };
+    eq(Q.capPolicy(under, { item_type: 'chat_message_observed' }), 'keep');
+    eq(Q.capPolicy(over, { item_type: 'chat_message_observed' }), 'suppress');
+    eq(Q.capPolicy(overBytes, { event_type: 'ext_field_written' }), 'suppress');
+    eq(Q.capPolicy(over, { event_type: 'ext_chat_autosend' }), 'suppress');
+    ['disposition_submitted', 'disposition_attempt', 'field_changed', 'flash_observed', 'lead_viewed', 'queue_stats', 'dispatcher_id_missing'].forEach(function (t) {
+      eq(Q.capPolicy(over, { event_type: t }), 'keep');
+    });
+  });
+});
+
 // -------------------------------------------------------------------- report
 
-if (failed.length) {
-  console.log('\n' + failed.length + ' FAILED, ' + passed + ' passed\n');
-  failed.forEach(function (f) { console.log('  x ' + f.name + '\n    ' + f.message); });
-  console.log('');
-  process.exit(1);
-}
-console.log('\n' + passed + ' tests passed\n');
+Promise.all(pending).then(function () {
+  if (failed.length) {
+    console.log('\n' + failed.length + ' FAILED, ' + passed + ' passed\n');
+    failed.forEach(function (f) { console.log('  x ' + f.name + '\n    ' + f.message); });
+    console.log('');
+    process.exit(1);
+  }
+  console.log('\n' + passed + ' tests passed\n');
+});

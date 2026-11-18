@@ -1,0 +1,18 @@
+name = "apc-ingest"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "apc_core"
+database_id = "a3dc449c-99d2-40d2-859d-1d56fc1b5bd4"
+migrations_dir = "migrations"
+
+# Coarse guard; the exact 2 s per-dispatcher gap is checked in code. Secret HMAC_SECRET is set with `wrangler secret put`.
+[[ratelimits]]
+name = "RL"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }
+
+[triggers]
+crons = ["30 12 * * *"]

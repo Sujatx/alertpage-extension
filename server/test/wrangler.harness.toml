@@ -1,0 +1,14 @@
+# Test-only config for test/harness.js; same local D1 as the real Worker (state shared via --persist-to).
+name = "apc-ingest-harness"
+main = "harness.js"
+compatibility_date = "2025-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "apc_core"
+database_id = "REPLACE_AT_DEPLOY"
+
+[[ratelimits]]
+name = "RL"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }

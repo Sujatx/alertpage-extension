@@ -26,13 +26,20 @@
     return C.DISPATCHER_ID_RE.test(id) ? null : 'invalid';
   }
 
-  /** The userID pill's text from an apa.pills array (matched by id, not text). */
+  /** The userID pill's text (matched by id), else the second pill's (a re-added pill gets a custom id). */
   function pillDispatcherText(pills) {
     if (!Array.isArray(pills)) { return null; }
     for (var i = 0; i < pills.length; i++) {
       if (pills[i] && pills[i].id === 'userID') { return pills[i].text; }
     }
-    return null;
+    return pills[1] ? pills[1].text : null;
+  }
+
+  /** One-time pill -> apa.dispatcherId migration: the id to store, or null (already set, or pill unusable). */
+  function migrateDispatcherId(pills, currentId) {
+    if (currentId !== undefined) { return null; }
+    var text = pillDispatcherText(pills);
+    return dispatcherIdProblem(text) === null ? normaliseDispatcherId(text) : null;
   }
 
   /**
@@ -77,6 +84,7 @@
     normaliseDispatcherId: normaliseDispatcherId,
     dispatcherIdProblem: dispatcherIdProblem,
     pillDispatcherText: pillDispatcherText,
+    migrateDispatcherId: migrateDispatcherId,
     buildEvent: buildEvent,
     stampForBatch: stampForBatch
   };

@@ -65,7 +65,7 @@
   function readStorage() {
     return new Promise(function (resolve) {
       try {
-        chrome.storage.local.get([RULES_KEY, SETTINGS_KEY, PILLS_KEY, DATA_FEED_KEY], function (got) {
+        chrome.storage.local.get([RULES_KEY, SETTINGS_KEY, PILLS_KEY, DATA_FEED_KEY, 'apa.counters'], function (got) {
           if (chrome.runtime.lastError) { resolve({}); return; }
           resolve(got || {});
         });
@@ -823,6 +823,79 @@
     }
   }
 
+  // ---------------------------------------------------------- footer counters
+
+  var COUNTERS = APA.counters || {};
+  var COUNT_KEY = 'apa.counters';
+  var COUNT_BTNS = { do_not_send: '#do-not-send-button', send_supervisor: '#send-supervisor-button', mark_as_duplicate: '#mark-as-duplicate-button' };
+  var countShown = {};   // action -> number currently displayed
+  var countTimer = null;
+
+  function reducedMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+  }
+
+  // Appends the pill once per button; returns its number window, or null if the button is missing.
+  function countWindow(action) {
+    var btn = document.querySelector(COUNT_BTNS[action]);
+    if (!btn) { return null; }
+    var pill = btn.querySelector('.apa-count');
+    if (!pill) {
+      pill = document.createElement('span');
+      pill.className = 'apa-count';
+      pill.setAttribute('data-apa-count', action);
+      var win = document.createElement('span');
+      win.className = 'apa-count-win';
+      pill.appendChild(win);
+      btn.appendChild(pill);
+    }
+    return pill.firstChild;
+  }
+
+  function setCount(action, n, animate) {
+    var win = countWindow(action);
+    if (!win) { return; }
+    var from = countShown[action];
+    countShown[action] = n;
+    var pill = win.parentNode;
+    pill.classList.toggle('apa-count-zero', n === 0);
+    var cur = win.lastChild;
+    if (!animate || from === undefined || from === n || !cur || !win.animate || reducedMotion()) {
+      win.textContent = '';
+      var only = document.createElement('span');
+      only.textContent = String(n);
+      win.appendChild(only);
+      return;
+    }
+    while (win.childNodes.length > 1) { win.removeChild(win.firstChild); }   // finish any roll in flight
+    var next = document.createElement('span');
+    next.textContent = String(n);
+    win.appendChild(next);
+    var dir = n > from ? 1 : -1;   // up: old slides up, new rises from below; down: reverse
+    var opts = { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' };
+    cur.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(' + (-100 * dir) + '%)' }], opts);
+    var a = next.animate([{ transform: 'translateY(' + (100 * dir) + '%)' }, { transform: 'translateY(0)' }], opts);
+    a.onfinish = function () { if (cur.parentNode === win) { win.removeChild(cur); } };
+    pill.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.18)', offset: 0.5 }, { transform: 'scale(1)' }],
+      { duration: 180, easing: 'ease-out' });
+  }
+
+  function renderCounters(raw, animate) {
+    if (!COUNTERS.visible) { return; }
+    var now = Date.now();
+    var vis = COUNTERS.visible(raw, now);
+    clearTimeout(countTimer);
+    // A 3 h reset happened while she was away: show the old numbers, then roll down.
+    var from = animate ? vis : COUNTERS.visible(raw, raw && typeof raw.lastAt === 'number' ? raw.lastAt : now);
+    COUNTERS.ACTIONS.forEach(function (a) {
+      if (countShown[a] === undefined) { setCount(a, from[a], false); }
+      setCount(a, vis[a], true);
+    });
+    if (vis.lastAt != null) {
+      countTimer = setTimeout(function () { renderCounters(raw, true); }, Math.min(vis.lastAt + COUNTERS.RESET_MS + 1 - now, 2147483000));
+    }
+  }
+
   // ------------------------------------------------------------------- entry
 
   function run(stored) {
@@ -841,6 +914,7 @@
     if (settings.footerReshuffleEnabled !== false) {
       try { enhanceFooterLayout(); } catch (err) { warn('footer layout', err); }
     }
+    try { renderCounters(stored[COUNT_KEY], false); } catch (err) { warn('counters', err); }
     try {
       var pills = NOTES.normalizePills ? NOTES.normalizePills(stored[PILLS_KEY], PC.DEFAULT_PILLS) : (PC.DEFAULT_PILLS || []);
       enhanceNotesPills(pills);
@@ -864,6 +938,9 @@
   // own re-renders); theme is the one exception because it is a single attribute.
   try {
     chrome.storage.onChanged.addListener(function (changes, area) {
+      if (area === 'local' && changes[COUNT_KEY]) {
+        try { renderCounters(changes[COUNT_KEY].newValue, true); } catch (err) { warn('counters', err); }
+      }
       if (area !== 'local' || !changes[SETTINGS_KEY]) { return; }
       var settings = Object.assign({}, K.DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue || {});
       applyTheme(settings);

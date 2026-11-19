@@ -19,6 +19,7 @@ importScripts('config/collector-settings.js', 'lib/collect-canon.js', 'lib/colle
   var ALARM = 'apc.tick';
   var STATUS_KEY = 'apc.status';
   var PILLS_KEY = 'apa.pills';
+  var ID_KEY = 'apa.dispatcherId';
   var SETTINGS_KEY = 'apa.settings';
   var HOUR = 3600 * 1000;
   var FETCH_TIMEOUT_MS = 30000;
@@ -326,8 +327,13 @@ importScripts('config/collector-settings.js', 'lib/collect-canon.js', 'lib/colle
     await drainAll();
     await maintenance(now);
 
-    var got = await storageGet([PILLS_KEY]);
-    var text = ENV.pillDispatcherText(got[PILLS_KEY]);
+    var text;
+    try {   // idempotent pill -> id migration; must never block uploading
+      var got = await storageGet([PILLS_KEY, ID_KEY]);
+      var migrated = ENV.migrateDispatcherId(got[PILLS_KEY], got[ID_KEY]);   // pill is never edited
+      if (migrated !== null) { await chrome.storage.local.set({ [ID_KEY]: migrated }); text = migrated; }
+      else { text = got[ID_KEY]; }
+    } catch (e) { text = (await storageGet([ID_KEY]))[ID_KEY]; }
     st.idProblem = ENV.dispatcherIdProblem(text);
     var more = false;
     if (st.idProblem) {

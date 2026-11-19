@@ -146,6 +146,10 @@ h2, summary {
 
 .minutes { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 12px; }
 .minutes.off { opacity: .45; }
+.id-input {
+  width: 90px; padding: 2px 4px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg);
+}
 .minutes input {
   width: 42px; padding: 2px 4px; text-align: right;
   border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg);

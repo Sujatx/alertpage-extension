@@ -39,6 +39,7 @@
         "lib/parse-lead.js",
         "lib/highlight.js",
         "lib/notes.js",
+        "lib/counters.js",
         "lib/lead-feed.js",
         "config/collector-settings.js",
         "lib/collect-canon.js",

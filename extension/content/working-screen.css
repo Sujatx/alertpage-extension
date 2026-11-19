@@ -699,3 +699,25 @@ html[data-apa-theme="dark"] button.apa-monitor-button--active:focus {
   background-color: #388e3c !important;
   border-color: #388e3c !important;
 }
+
+/* Footer disposition counters (inside the button, after its label) */
+.apa-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .22);
+  color: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+.apa-count-zero { opacity: .55; }
+.apa-count-win {
+  display: inline-grid;
+  height: 18px;
+  overflow: hidden;
+  vertical-align: top;
+}
+.apa-count-win > span { grid-area: 1 / 1; text-align: center; }

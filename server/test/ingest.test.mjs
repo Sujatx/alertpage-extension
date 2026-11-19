@@ -74,7 +74,7 @@ const chatItem = (disp, author, text, minute, o = {}) => ({
 });
 const batch = (events, o = {}) => ({ batch_id: o.id ?? randomUUID(), client_sent_at: Date.now(), events });
 async function post(body, { base = MAIN, origin = ORIGIN, raw, headers = {} } = {}) {
-  const h = { 'content-type': 'application/json', ...headers };
+  const h = { 'content-type': 'application/json', connection: 'close', ...headers };
   if (origin) h.origin = origin;
   const r = await fetch(base + '/v1/events:batch', { method: 'POST', headers: h, body: raw ?? JSON.stringify(body) });
   const t = await r.text();

@@ -15,7 +15,7 @@ Wipes `server/.wrangler/state`, applies migrations, spawns two `wrangler dev --l
 (ports 8787 and 8788), prints PASS/FAIL per case, kills them, exits non-zero on failure (~2 min).
 Needs `server/.dev.vars` with `HMAC_SECRET=anything` (git-ignored).
 
-## Deploy (not done yet)
+## Deploy (done 2026-11-18/19; steps kept for redeploys)
 
     cd server
     npx wrangler d1 create apc_core --location apac         # near the dispatchers (India); copy database_id into wrangler.toml

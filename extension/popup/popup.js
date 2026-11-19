@@ -8,6 +8,8 @@
  *   apa.settings          - highlightEnabled, footerReshuffleEnabled,
  *                           monitorAutoSendEnabled, collectorEnabled, darkMode only
  *   apa.dataFeedSettings  - every field except syncEnabled
+ *   apa.dispatcherId      - the "Your ID" box, only once she has typed in it (never by
+ *                           load or Restore defaults)
  *
  * The keyword editor is deliberately one flat list. apa.rules supports several
  * categories with their own colours (see config/keywords.js), but the default ruleset
@@ -35,6 +37,7 @@
   var RULES_KEY = 'apa.rules';
   var PILLS_KEY = 'apa.pills';
   var DATA_FEED_KEY = 'apa.dataFeedSettings';
+  var ID_KEY = 'apa.dispatcherId';
 
   var SAVE_DEBOUNCE_MS = 300;
   var RESET_ARM_MS = 3000;
@@ -47,6 +50,7 @@
     collectorEnabled: $('collectorEnabled'),
     collectorStatus: $('collectorStatus'),
     collectorHint: $('collectorHint'),
+    dispatcherId: $('dispatcherId'),
     syncSource: $('syncSource'),
     syncCounty: $('syncCounty'),
     syncTalkgroup: $('syncTalkgroup'),
@@ -64,7 +68,8 @@
     themeToggle: $('themeToggle')
   };
 
-  var state = { settings: null, rules: null, pills: null, dataFeed: null };
+  // dispatcherId stays undefined until she edits it, so an untouched popup never writes ''.
+  var state = { settings: null, rules: null, pills: null, dataFeed: null, dispatcherId: undefined };
 
   // ------------------------------------------------------------------ helpers
 
@@ -121,6 +126,7 @@
       });
       patch[RULES_KEY] = cleanRules();
       patch[PILLS_KEY] = state.pills;
+      if (state.dispatcherId !== undefined) { patch[ID_KEY] = state.dispatcherId; }
 
       chrome.storage.local.set(patch, function () {
         if (chrome.runtime.lastError) { say('Could not save', true); } else { say('Saved'); }
@@ -269,10 +275,9 @@
     renderCollectorHint();
   }
 
-  // Read from the pill as typed, not from the service worker, so the hint clears at once.
+  // Read from the box as typed, not from the service worker, so the hint clears at once.
   function renderCollectorHint() {
-    var ENV = globalThis.APA.envelope;
-    els.collectorHint.hidden = !ENV.dispatcherIdProblem(ENV.pillDispatcherText(state.pills));
+    els.collectorHint.hidden = !globalThis.APA.envelope.dispatcherIdProblem(els.dispatcherId.value);
   }
 
   function renderAll() {
@@ -284,8 +289,11 @@
   // ------------------------------------------------------------------- wiring
 
   function load() {
-    chrome.storage.local.get([SETTINGS_KEY, RULES_KEY, PILLS_KEY, DATA_FEED_KEY, 'apc.status'], function (got) {
+    chrome.storage.local.get([SETTINGS_KEY, RULES_KEY, PILLS_KEY, DATA_FEED_KEY, ID_KEY, 'apc.status'], function (got) {
       var stored = got || {};
+      var prefill = globalThis.APA.envelope.migrateDispatcherId(stored[PILLS_KEY], stored[ID_KEY]);
+      if (typeof stored[ID_KEY] === 'string') { els.dispatcherId.value = stored[ID_KEY]; }
+      else if (prefill !== null) { els.dispatcherId.value = prefill; state.dispatcherId = prefill; schedule(); }
       state.settings = Object.assign({}, K.DEFAULT_SETTINGS, stored[SETTINGS_KEY] || {});
       state.dataFeed = Object.assign({}, DF.DEFAULT_DATA_FEED_SETTINGS, stored[DATA_FEED_KEY] || {});
       state.rules = HL.normalizeRules(stored[RULES_KEY], K.DEFAULT_RULES);
@@ -305,6 +313,10 @@
   });
   els.syncTimeRange.addEventListener('change', renderMinutesState);
   els.timeWindowMinutes.addEventListener('input', schedule);
+  els.dispatcherId.addEventListener('input', function () {
+    state.dispatcherId = els.dispatcherId.value.trim().toLowerCase();
+    schedule();
+  });
 
   els.keywordInput.addEventListener('keydown', function (ev) {
     if (ev.key === 'Enter' || ev.key === ',') {

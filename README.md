@@ -29,14 +29,15 @@ Then open a lead at `https://dispatch.alertpage.net/web/working-queue/<lead id>/
 The Data Feed link needs you signed in to `ap-portal.alertpage.net` in the same browser.
 If you aren't, the link still works — it just opens the Data Feed unfiltered.
 
-**One-time setup:** open the toolbar popup → Note pills → set the `AP***` pill to your
-company ID (for example `ap422`). The collector uses it to tell dispatchers apart and
-won't upload until it's set.
+**One-time setup:** open the toolbar popup → Collector → **Your ID**, and enter your
+company ID (for example `ap422`). It is filled in from your old ID note pill if you had one.
+The collector uses it to tell dispatchers apart and won't upload until it's set.
 
 ## Update
 
-Download the latest zip from GitHub, extract it over the **same** folder, then click the
-reload icon on the extension in `chrome://extensions`. Your settings are kept.
+Double-click `Update AlertPage.bat` (see [tools/README.md](tools/README.md)), or download the
+latest zip from GitHub and extract it over the **same** folder. Then click the reload icon on
+the extension in `chrome://extensions`. Your settings are kept.
 
 ## Usage
 
@@ -48,7 +49,7 @@ already applied — nothing to turn on.
 - **Data Feed ↗** opens the Data Feed pre-filtered to that lead's system, county, and
   time window, reusing one tab across leads instead of piling up new ones.
 - The toolbar icon is the only settings surface: display toggles, Data Feed link
-  options, the collector switch and its counts, the keyword list, and quick-fill note
+  options, the collector switch, Your ID and its counts, the keyword list, and quick-fill note
   pills — everything saves as you type.
 
 ## Collector

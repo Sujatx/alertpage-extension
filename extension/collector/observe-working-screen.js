@@ -18,6 +18,8 @@
 
   var SETTINGS_KEY = 'apa.settings';
   var IDENT_KEY = 'apc.identity';
+  var COUNT_KEY = 'apa.counters';
+  var COUNT_PENDING_KEY = 'apa.counters.pending';
   var CAPTURE = { capture: true, passive: true };
   var ATTEMPT_IDS = ['do-not-send-button', 'send-supervisor-button', 'mark-as-duplicate-button',
     'send-confirmed-button', 'send-admin-button'];
@@ -122,6 +124,12 @@
   var initialForm = leadForm ? readForm(leadForm) : {};
   var snapshot = readSnapshot();
   var flashText = readFlash();
+  // Counter hand-off across the submit navigation (see flushSubmit); read once, synchronously.
+  var pendingCount = null;
+  try {
+    pendingCount = JSON.parse(localStorage.getItem(COUNT_PENDING_KEY));
+    localStorage.removeItem(COUNT_PENDING_KEY);
+  } catch (e) { pendingCount = null; }
 
   function readSnapshot() {
     var anchor = $(S.leadIdAnchor && S.leadIdAnchor.sel);
@@ -236,6 +244,43 @@
     pendingSubmit = null;
     p.ev.payload.blocked = blocked;
     deliver(p.ev);
+  }
+
+  // ---- footer-button counters: independent of the collector toggle (registered always) ----
+  var pendingAct = null;
+  function flushCount(blocked) {
+    var act = pendingAct;
+    pendingAct = null;
+    try {
+      if (act && !blocked && APA.counters && APA.counters.ACTIONS.indexOf(act) >= 0) {
+        localStorage.setItem(COUNT_PENDING_KEY, JSON.stringify({ action: act, at: Date.now() }));
+      }
+    } catch (e) { /* ignore */ }
+  }
+  var onCountCapture = safe(function (e) {
+    var f = e.target;
+    if (!f || f.id !== 'lead-form') { return; }
+    var vals = Array.prototype.map.call(f.querySelectorAll('input[name="event_type"]'), function (i) { return i.value; });
+    pendingAct = vals.length ? vals[vals.length - 1] : null;
+    setTimeout(safe(function () { flushCount(false); }), 0);   // fallback if propagation is stopped
+  });
+  var onCountBubble = safe(function (e) {
+    if (e.target && e.target.id === 'lead-form') { flushCount(e.defaultPrevented === true); }
+  });
+
+  // Applies the count handed over by the previous page's submit once the flash confirms it.
+  function countConfirmed() {
+    try {
+      if (pendingCount && APA.counters && flashText && /lead processed/i.test(flashText) && Date.now() - pendingCount.at < 5 * 60 * 1000) {
+        chrome.storage.local.get([COUNT_KEY], function (got) {
+          try {
+            var o = {};
+            o[COUNT_KEY] = APA.counters.applyConfirmed(got && got[COUNT_KEY], pendingCount.action, Date.now());
+            chrome.storage.local.set(o, function () { void chrome.runtime.lastError; });
+          } catch (e) { /* ignore */ }
+        });
+      }
+    } catch (e) { /* ignore */ }
   }
 
   var onSubmitCapture = safe(function (e) {
@@ -370,6 +415,9 @@
   }
 
   try {
+    document.addEventListener('submit', onCountCapture, CAPTURE);
+    document.addEventListener('submit', onCountBubble, { passive: true });
+    countConfirmed();
     reHandLeftovers();
     chrome.storage.local.get([SETTINGS_KEY], function (got) {
       try {

@@ -18,6 +18,7 @@ var LEAD = require(path.join(ROOT, 'extension/lib/parse-lead.js'));
 var HL = require(path.join(ROOT, 'extension/lib/highlight.js'));
 var K = require(path.join(ROOT, 'extension/config/keywords.js'));
 var NOTES = require(path.join(ROOT, 'extension/lib/notes.js'));
+var CNT = require(path.join(ROOT, 'extension/lib/counters.js'));
 var PC = require(path.join(ROOT, 'extension/config/pills.js'));
 var FEED = require(path.join(ROOT, 'extension/lib/lead-feed.js'));
 var DFC = require(path.join(ROOT, 'extension/config/data-feed-settings.js'));
@@ -616,6 +617,33 @@ describe('collector dispatcher id', function () {
     eq(ENV.pillDispatcherText([{ id: 'dup', text: 'dup' }, { id: 'userID', text: 'ap9' }]), 'ap9');
     eq(ENV.pillDispatcherText(null), null);
   });
+  it('migrates a valid userID pill once, lowercased and trimmed', function () {
+    eq(ENV.migrateDispatcherId([{ id: 'userID', text: 'AP422' }], undefined), 'ap422');
+    eq(ENV.migrateDispatcherId([{ id: 'userID', text: '  ap422 ' }], undefined), 'ap422');
+  });
+  it('does not migrate placeholder, empty, invalid or missing pills', function () {
+    eq(ENV.migrateDispatcherId([{ id: 'userID', text: 'AP***' }], undefined), null);
+    eq(ENV.migrateDispatcherId([{ id: 'userID', text: '' }], undefined), null);
+    eq(ENV.migrateDispatcherId([{ id: 'userID', text: 'ap 4!' }], undefined), null);
+    eq(ENV.migrateDispatcherId([{ id: 'other', text: 'ap1' }], undefined), null);
+    eq(ENV.migrateDispatcherId(undefined, undefined), null);
+  });
+  it('falls back to the second pill when no pill has the userID id', function () {
+    var pills = [{ id: 'custom-a', text: 'dup' }, { id: 'custom-b', text: 'AP318' }, { id: 'custom-c', text: 'hazmat' }];
+    eq(ENV.migrateDispatcherId(pills, undefined), 'ap318');
+  });
+  it('userID id wins over the second row', function () {
+    var pills = [{ id: 'userID', text: 'ap1' }, { id: 'x', text: 'ap2' }];
+    eq(ENV.migrateDispatcherId(pills, undefined), 'ap1');
+  });
+  it('second-row fallback: invalid text or a single pill gives null', function () {
+    eq(ENV.migrateDispatcherId([{ id: 'a', text: 'dup' }, { id: 'b', text: 'not valid!' }], undefined), null);
+    eq(ENV.migrateDispatcherId([{ id: 'a', text: 'ap1' }], undefined), null);
+  });
+  it('does not migrate over an id already set, even an empty one', function () {
+    eq(ENV.migrateDispatcherId([{ id: 'userID', text: 'ap422' }], 'ap1'), null);
+    eq(ENV.migrateDispatcherId([{ id: 'userID', text: 'ap422' }], ''), null);
+  });
 });
 
 describe('collector envelope', function () {
@@ -853,6 +881,44 @@ describe('collector queue', function () {
     eq(Q.capPolicy(over, { event_type: 'ext_chat_autosend' }), 'suppress');
     ['disposition_submitted', 'disposition_attempt', 'field_changed', 'flash_observed', 'lead_viewed', 'queue_stats', 'dispatcher_id_missing'].forEach(function (t) {
       eq(Q.capPolicy(over, { event_type: t }), 'keep');
+    });
+  });
+});
+
+describe('counters', function () {
+  var H = 3 * 60 * 60 * 1000, T = 1000000;
+  it('increments and separates actions', function () {
+    var s = CNT.applyConfirmed(null, 'do_not_send', T);
+    s = CNT.applyConfirmed(s, 'do_not_send', T + 1);
+    s = CNT.applyConfirmed(s, 'mark_as_duplicate', T + 2);
+    var v = CNT.visible(s, T + 3);
+    eq(v.do_not_send, 2); eq(v.mark_as_duplicate, 1); eq(v.send_supervisor, 0); eq(v.lastAt, T + 2);
+  });
+  it('exactly 3h does not reset, 3h+1ms does', function () {
+    var s = CNT.applyConfirmed(null, 'send_supervisor', T);
+    eq(CNT.visible(s, T + H).send_supervisor, 1);
+    var r = CNT.visible(s, T + H + 1);
+    eq(r.send_supervisor, 0); eq(r.lastAt, null);
+  });
+  it('reset then count gives 1', function () {
+    var s = CNT.applyConfirmed(null, 'send_supervisor', T);
+    s = CNT.applyConfirmed(s, 'send_supervisor', T + H + 1);
+    eq(CNT.visible(s, T + H + 1).send_supervisor, 1);
+  });
+  it('unknown action is ignored (lastAt not bumped)', function () {
+    var s = CNT.applyConfirmed(null, 'do_not_send', T);
+    var u = CNT.applyConfirmed(s, 'bogus', T + 5);
+    eq(u.do_not_send, 1); eq(u.lastAt, T);
+  });
+  it('9 -> 10 rollover', function () {
+    var s = null;
+    for (var i = 0; i < 10; i++) { s = CNT.applyConfirmed(s, 'do_not_send', T + i); }
+    eq(CNT.visible(s, T + 10).do_not_send, 10);
+  });
+  it('missing or malformed state is all zeros', function () {
+    [undefined, null, 'x', {}, { lastAt: 'a', do_not_send: 5 }].forEach(function (b) {
+      var v = CNT.visible(b, T);
+      eq(v.do_not_send + v.send_supervisor + v.mark_as_duplicate, 0); eq(v.lastAt, null);
     });
   });
 });

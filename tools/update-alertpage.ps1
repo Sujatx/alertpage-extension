@@ -11,10 +11,15 @@ $tmp = Join-Path $env:TEMP ('alertpage-update-' + [guid]::NewGuid())
 $failed = $false
 
 try {
-    if (-not (Test-Path (Join-Path $ExtensionDir 'manifest.json'))) {
-        throw "Extension folder not found or has no manifest.json: $ExtensionDir"
+    # First run: create the folder. Refuse a non-empty folder that isn't the extension, so we never wipe something else.
+    $oldVersion = 'none (first install)'
+    if (Test-Path (Join-Path $ExtensionDir 'manifest.json')) {
+        $oldVersion = (Get-Content (Join-Path $ExtensionDir 'manifest.json') -Raw | ConvertFrom-Json).version
+    } elseif ((Test-Path $ExtensionDir) -and @(Get-ChildItem $ExtensionDir -Force).Count -gt 0) {
+        throw "$ExtensionDir has files but no manifest.json, so it is not the extension. Nothing was changed."
+    } else {
+        New-Item -ItemType Directory -Path $ExtensionDir -Force | Out-Null
     }
-    $oldVersion = (Get-Content (Join-Path $ExtensionDir 'manifest.json') -Raw | ConvertFrom-Json).version
 
     New-Item -ItemType Directory -Path $tmp | Out-Null
     $zip = Join-Path $tmp 'alertpage-extension.zip'

@@ -1,13 +1,12 @@
 # Updating the AlertPage extension
 
-## One-time setup (the last manual install)
+## First time (once)
 
-1. In Chrome, go to `chrome://extensions`, find **AlertPage Working Screen Assist**, click **Details**, and read **Loaded from**. That folder is the one Chrome is using. Do not delete it.
-2. Delete every old zip file and every other extracted copy of the extension (Downloads, Desktop, etc.).
-3. Move that one folder to `C:\AlertPage\extension`. Only if you moved it:
-   - In `chrome://extensions`, remove the old entry, then click **Load unpacked** and pick `C:\AlertPage\extension`.
-   - **Warning:** moving changes the folder path, so Chrome treats it as a new extension and your settings reset once. Open the extension popup and type your ID in the **Your ID** field again (one time only).
-4. Put `Update AlertPage.bat` and `update-alertpage.ps1` in `C:\AlertPage`, next to the `extension` folder, not inside it.
+1. Delete the old AlertPage zip and the old extracted folder. In `chrome://extensions`, click **Remove** on AlertPage Working Screen Assist.
+2. Make a folder `C:\AlertPage` and put `Update AlertPage.bat` and `update-alertpage.ps1` in it.
+3. Double-click `Update AlertPage.bat`. It downloads and installs the extension into `C:\AlertPage\extension`.
+4. In `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, pick `C:\AlertPage\extension`.
+5. Click the extension icon and type your ID in **Your ID** (your toggles and note pills start fresh too).
 
 ## How to update
 

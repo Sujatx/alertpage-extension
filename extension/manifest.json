@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AlertPage Working Screen Assist",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Readability, Accessibility and Data Feed sync for AlertPage.",
   "permissions": ["storage", "alarms"],
   "host_permissions": [

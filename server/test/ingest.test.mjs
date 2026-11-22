@@ -262,14 +262,19 @@ try {
     const c = dispo('t13', ld + 3, { at: T + 1200000 });
     const d = dispo('t13', ld + 4, { at: T + 1800000 }), e = dispo('t13', ld + 5, { at: T + 1810000 });
     const flashD = ev('t13', 'flash_observed', { flash_text: 'Lead Processed', previous_page_load_id: null }, { at: T + 1840000, tab: 3 });
-    const evs = [a, flashA, b, flashB, c, d, e, flashD];
-    return { evs, ids: { a, b, c, d, e, flashA, flashB } };
+    // Production shape: two submits 5 s apart, each flash names its own page load, so both are confirmed (rc-2),
+    // one flash arriving 300 s after its submit (outside the 120 s window, inside the exact-match limit).
+    const f = dispo('t13', ld + 6, { at: T + 2400000, pl: randomUUID(), tab: 1 }), g = dispo('t13', ld + 7, { at: T + 2405000, pl: randomUUID(), tab: 1 });
+    const flashF = ev('t13', 'flash_observed', { flash_text: 'Lead Processed', previous_page_load_id: f.page_load_id }, { at: T + 2403000, tab: 1 });
+    const flashG = ev('t13', 'flash_observed', { flash_text: 'Lead Processed', previous_page_load_id: g.page_load_id }, { at: T + 2405000 + 300000, tab: 1 });
+    const evs = [a, flashA, b, flashB, c, d, e, flashD, f, flashF, g, flashG];
+    return { evs, ids: { a, b, c, d, e, f, g, flashA, flashB, flashF, flashG } };
   };
   const cron = await mk();
   await test('cron: reconciler -> confirmed / probable / unconfirmed / ambiguous; aggregates; 90-day purge in FK order', async () => {
     const r = await post(batch(cron.evs));
-    ok(r.body.accepted === 8, JSON.stringify(r.body));
-    eq(counts('t13').dispositions, 5, 'dispositions before');
+    ok(r.body.accepted === 12, JSON.stringify(r.body));
+    eq(counts('t13').dispositions, 7, 'dispositions before');
     const c = await fetch(MAIN + '/__scheduled?cron=30+12+*+*+*');
     ok(c.status === 200, 'scheduled trigger: ' + c.status);
     const I = cron.ids, out = {};
@@ -284,7 +289,9 @@ try {
     eq(out[I.b.event_id].s, 'probable', 'b'); eq(out[I.b.event_id].o, I.flashB.event_id, 'b outcome');
     eq(out[I.c.event_id].s, 'unconfirmed', 'c'); eq(out[I.c.event_id].o, null, 'c outcome');
     eq([out[I.d.event_id].s, out[I.e.event_id].s], ['ambiguous', 'ambiguous'], 'd,e');
-    eq(out[I.a.event_id].v, 'rc-1', 'rule version');
+    eq(out[I.a.event_id].v, 'rc-2', 'rule version');
+    eq([out[I.f.event_id].s, out[I.g.event_id].s], ['confirmed', 'confirmed'], 'f,g exact');
+    eq([out[I.f.event_id].o, out[I.g.event_id].o], [I.flashF.event_id, I.flashG.event_id], 'f,g outcomes');
 
     // aggregates: yesterday's seeded events
     eq(sql(`SELECT event_type, n FROM daily_counts WHERE dispatcher_id='tseed' AND n < 5 ORDER BY event_type`), [{ event_type: 'flash_observed', n: 1 }, { event_type: 'queue_stats', n: 2 }], 'daily_counts');
@@ -296,7 +303,7 @@ try {
       (SELECT count(*) FROM leads WHERE lead_id=900001) AS lead_gone, (SELECT count(*) FROM leads WHERE lead_id=900002) AS lead_kept,
       (SELECT count(*) FROM daily_counts WHERE n = 5) AS old_counts`),
       { ev: 0, dsp: 0, snap: 0, chat: 0, claim: 0, old_batch: 0, yday_batch: 1, lead_gone: 0, lead_kept: 1, old_counts: 0 }, 'purge');
-    eq(counts('t13').events, 8, 'recent events survived');
+    eq(counts('t13').events, 12, 'recent events survived');
   });
 
   await test('AC-9 scan: no stored payload, snapshot or chat text contains token/csrf/cookie/password/api_key', async () => {

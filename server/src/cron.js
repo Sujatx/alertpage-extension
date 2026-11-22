@@ -1,6 +1,6 @@
 // Daily cron (12:30 UTC): reconcile outcomes, roll up yesterday, purge past retention (ADR-0015).
 // Each part is bounded and isolated so one failure does not stop the others; all are safe to re-run.
-const DAY = 86400000, WINDOW_MS = 120000, RAW_KEEP_DAYS = 90, AGG_KEEP_DAYS = 366, RECONCILE_LIMIT = 500, PURGE_CHUNK = 5000;
+const DAY = 86400000, WINDOW_MS = 120000, RAW_KEEP_DAYS = 90, AGG_KEEP_DAYS = 366, RECONCILE_LIMIT = 500, RECONCILE_PASSES = 4, EXACT_MS = 600000, PURGE_CHUNK = 5000;
 const MAX_INT = 9223372036854775807n.toString();
 
 export async function runCron(env, now = Date.now()) {
@@ -12,38 +12,63 @@ export async function runCron(env, now = Date.now()) {
   return out;
 }
 
-// event-schema-v1 section 6. A flash is a candidate for a disposition of the same dispatcher within WINDOW_MS after submit.
+// event-schema-v1 section 6 (rule rc-2). A flash is a candidate for a disposition of the same dispatcher within WINDOW_MS after submit,
+// or, with no time limit inside EXACT_MS, when its previous_page_load_id names the disposition's own page load (the exact match).
+// An exact match wins over everything else: dispatchers submit every few seconds, so many flashes share one window.
+// Runs up to RECONCILE_PASSES batches of RECONCILE_LIMIT per call, so the nightly run drains the backlog.
 export async function reconcile(db, now) {
+  let total = 0;
+  for (let pass = 0; pass < RECONCILE_PASSES; pass++) {
+    const n = await reconcileBatch(db, now);
+    total += n;
+    if (n < RECONCILE_LIMIT) break;
+  }
+  return { reconciled: total };
+}
+
+async function reconcileBatch(db, now) {
   const { results } = await db.prepare(`
     SELECT d.event_id, d.tab_id, d.page_load_id, f.event_id AS flash_id, f.tab_id AS flash_tab,
            json_extract(f.payload, '$.previous_page_load_id') AS prev, f.occurred_at AS flash_at
       FROM (SELECT event_id, dispatcher_id, tab_id, page_load_id, submitted_at FROM dispositions
              WHERE outcome_status = 'pending' AND submitted_at < ?1 ORDER BY submitted_at LIMIT ?2) d
       LEFT JOIN events f ON f.dispatcher_id = d.dispatcher_id AND f.event_type = 'flash_observed'
-                        AND f.occurred_at BETWEEN d.submitted_at AND d.submitted_at + ?3`)
-    .bind(now - WINDOW_MS, RECONCILE_LIMIT, WINDOW_MS).all();
-  if (!results.length) return { reconciled: 0 };
+                        AND f.occurred_at BETWEEN d.submitted_at AND d.submitted_at + ?4
+                        AND (f.occurred_at <= d.submitted_at + ?3 OR json_extract(f.payload, '$.previous_page_load_id') = d.page_load_id)`)
+    .bind(now - WINDOW_MS, RECONCILE_LIMIT, WINDOW_MS, EXACT_MS).all();
+  if (!results.length) return 0;
 
-  const byDisp = new Map(), flashUse = new Map(); // disposition -> {row, flashes[]}, flash -> number of dispositions claiming it
+  const byDisp = new Map(); // disposition -> {row, flashes[]}
   for (const r of results) {
     const d = byDisp.get(r.event_id) ?? { row: r, flashes: [] };
     byDisp.set(r.event_id, d);
-    if (r.flash_id) { d.flashes.push(r); flashUse.set(r.flash_id, (flashUse.get(r.flash_id) ?? 0) + 1); }
+    if (r.flash_id) d.flashes.push(r);
+  }
+  const isExact = (row, f) => f.prev && f.prev === row.page_load_id;
+  // A flash that names one disposition's page load is that disposition's evidence, not a candidate for the others.
+  const exactUse = new Map();
+  for (const { row, flashes } of byDisp.values()) for (const f of flashes) if (isExact(row, f)) exactUse.set(f.flash_id, (exactUse.get(f.flash_id) ?? 0) + 1);
+  const taken = (f) => exactUse.has(f.flash_id);
+
+  const flashUse = new Map(); // flash -> number of dispositions still claiming it
+  for (const d of byDisp.values()) {
+    d.exact = d.flashes.find((f) => isExact(d.row, f) && exactUse.get(f.flash_id) === 1);
+    if (!d.exact) { d.flashes = d.flashes.filter((f) => !taken(f) || isExact(d.row, f)); for (const f of d.flashes) flashUse.set(f.flash_id, (flashUse.get(f.flash_id) ?? 0) + 1); }
   }
   const verdicts = [];
-  for (const [id, { row, flashes }] of byDisp) {
+  for (const [id, { row, flashes, exact }] of byDisp) {
     let status, outcome = null;
-    const exact = flashes.find((f) => f.prev && f.prev === row.page_load_id);
-    if (!flashes.length) status = 'unconfirmed';
-    else if (flashes.length > 1 || flashUse.get(flashes[0].flash_id) > 1) { status = 'ambiguous'; outcome = (exact ?? flashes.sort((a, b) => a.flash_at - b.flash_at)[0]).flash_id; }
-    else { status = exact ? 'confirmed' : 'probable'; outcome = flashes[0].flash_id; }
+    if (exact) { status = 'confirmed'; outcome = exact.flash_id; }
+    else if (!flashes.length) status = 'unconfirmed';
+    else if (flashes.length > 1 || flashUse.get(flashes[0].flash_id) > 1) { status = 'ambiguous'; outcome = (flashes.find((f) => isExact(row, f)) ?? flashes.sort((a, b) => a.flash_at - b.flash_at)[0]).flash_id; }
+    else { status = 'probable'; outcome = flashes[0].flash_id; }
     verdicts.push({ id, status, outcome });
   }
   await db.batch([db.prepare(`
-    UPDATE dispositions SET outcome_status = j.status, outcome_event_id = j.outcome, reconciled_at = ?2, reconcile_rule_version = 'rc-1'
+    UPDATE dispositions SET outcome_status = j.status, outcome_event_id = j.outcome, reconciled_at = ?2, reconcile_rule_version = 'rc-2'
       FROM (SELECT json_extract(value,'$.id') AS id, json_extract(value,'$.status') AS status, json_extract(value,'$.outcome') AS outcome FROM json_each(?1)) j
      WHERE dispositions.event_id = j.id AND dispositions.outcome_status = 'pending'`).bind(JSON.stringify(verdicts), now)]);
-  return { reconciled: verdicts.length };
+  return verdicts.length;
 }
 
 // Yesterday's (UTC) events by dispatcher and type. The event_seq range comes from upload_batches so events is never full-scanned.

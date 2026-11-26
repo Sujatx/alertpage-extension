@@ -3,6 +3,7 @@
 import C from '../../extension/config/collector-settings.js';
 import canon from '../../extension/lib/collect-canon.js';
 import { runCron } from './cron.js';
+import { report } from './report.js';
 
 const ACTIONS = new Set(['do_not_send', 'send_supervisor', 'mark_as_duplicate']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -310,6 +311,9 @@ async function ingest(req, env) {
 export default {
   async fetch(req, env) {
     const { pathname } = new URL(req.url);
+    if (pathname === '/report') {
+      try { return await report(req, env); } catch { return d1Down(); }
+    }
     if (pathname !== '/v1/events:batch') return json({ error: 'not_found' }, 404);
     if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
     return ingest(req, env);

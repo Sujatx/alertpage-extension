@@ -5,7 +5,7 @@ stores them idempotently, and runs a daily cron (reconcile outcomes, daily count
 Contract values come from `extension/config/collector-settings.js` and `extension/lib/collect-canon.js`
 (bundled by wrangler, no copies). No dependencies, no package.json.
 
-Layout: `src/index.js` (ingest), `src/cron.js`, `migrations/`, `test/` (end-to-end), `ops/health.mjs`.
+Layout: `src/index.js` (ingest), `src/cron.js`, `src/report.js`, `migrations/`, `test/` (end-to-end), `ops/health.mjs`.
 
 ## Test locally
 
@@ -32,3 +32,11 @@ The Worker answers 500 `server_misconfigured` until `HMAC_SECRET` is set.
     node server/ops/health.mjs --local
 
 Per-dispatcher activity, unknown IDs, identity mismatches, pending outcomes, rows written vs the Free quota.
+
+## Check-in page
+
+`GET /report?key=<REPORT_KEY>` is a read-only page: health warnings, leads and actions per dispatcher,
+dataset size, days collecting. Counts only, no lead or chat text. It answers 404 until the secret is
+set and for a wrong key. To set (or rotate) the key and get the link, in PowerShell from `server/`:
+
+    $k = [guid]::NewGuid().ToString('N'); $k | npx wrangler secret put REPORT_KEY; "https://apc-ingest.sujat.workers.dev/report?key=$k"

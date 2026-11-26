@@ -118,7 +118,7 @@ try {
   const s = wr(['d1', 'execute', 'apc_core', '--local', '--file', `"${f}"`]);
   if (s.status !== 0) throw new Error('seed failed: ' + (s.stderr || s.stdout).slice(-500));
 
-  await start(['--port', '8787', '--test-scheduled'], MAIN);
+  await start(['--port', '8787', '--test-scheduled', '--var', 'REPORT_KEY:testkey'], MAIN);
   await start(['--port', '8788', '-c', 'test/wrangler.harness.toml', '--persist-to', '.wrangler/state', '--var', 'HMAC_SECRET:harness-secret'], HARNESS);
 } catch (e) { console.log('SETUP FAILED: ' + e.message); killAll(); process.exit(2); }
 
@@ -304,6 +304,14 @@ try {
       (SELECT count(*) FROM daily_counts WHERE n = 5) AS old_counts`),
       { ev: 0, dsp: 0, snap: 0, chat: 0, claim: 0, old_batch: 0, yday_batch: 1, lead_gone: 0, lead_kept: 1, old_counts: 0 }, 'purge');
     eq(counts('t13').events, 12, 'recent events survived');
+  });
+
+  await test('report: 404 without the right key; with it, counts per dispatcher and no lead or chat text', async () => {
+    for (const q of ['', '?key=', '?key=wrong']) eq((await fetch(MAIN + '/report' + q)).status, 404, 'status for ' + q);
+    const r = await fetch(MAIN + '/report?key=testkey'), html = await r.text();
+    eq(r.status, 200, 'status: ' + html.slice(0, 200));
+    ok(html.includes('t13: 7<') && html.includes('7 do not send (100%)'), 'counts missing');
+    ok(!html.includes('dup of 1') && !html.includes('PAGING') && !html.includes('synthetic'), 'stored text leaked');
   });
 
   await test('AC-9 scan: no stored payload, snapshot or chat text contains token/csrf/cookie/password/api_key', async () => {
